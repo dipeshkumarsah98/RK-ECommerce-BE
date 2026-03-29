@@ -1,10 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
-import { authenticate, requireRoles, AuthRequest } from "../middlewares/auth.js";
+import {
+  authenticate,
+  requireRoles,
+  AuthRequest,
+} from "../middlewares/auth.js";
 import { validate } from "../middlewares/validate.js";
-import { createStockMovement, listStockMovements } from "../services/stock.service.js";
-import { StockMovementType } from "../generated/prisma/index.js";
+import {
+  createStockMovement,
+  listStockMovements,
+} from "../services/stock.service.js";
 import { BadRequestError } from "../lib/errors.js";
+import { StockMovementType } from "../lib/prisma.js";
 
 const router = Router();
 
@@ -12,7 +19,13 @@ const CreateMovementSchema = z.object({
   productId: z.string().uuid(),
   type: z.nativeEnum(StockMovementType),
   quantity: z.number().int().positive(),
-  reason: z.enum(["RESTOCK", "ORDER_PLACED", "ORDER_CANCELLED", "RETURN", "CORRECTION"]),
+  reason: z.enum([
+    "RESTOCK",
+    "ORDER_PLACED",
+    "ORDER_CANCELLED",
+    "RETURN",
+    "CORRECTION",
+  ]),
   notes: z.string().optional(),
 });
 
@@ -77,7 +90,7 @@ router.post(
       if (err instanceof Error) next(new BadRequestError(err.message));
       else next(err);
     }
-  }
+  },
 );
 
 /**
@@ -107,7 +120,10 @@ router.post(
  */
 router.get("/", authenticate, requireRoles("admin"), async (req, res, next) => {
   try {
-    const productId = typeof req.query.product_id === "string" ? req.query.product_id : undefined;
+    const productId =
+      typeof req.query.product_id === "string"
+        ? req.query.product_id
+        : undefined;
     const movements = await listStockMovements(productId);
     res.json(movements);
   } catch (err) {

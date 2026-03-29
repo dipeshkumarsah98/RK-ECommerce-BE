@@ -1,8 +1,11 @@
-import { OrderStatus, VerificationStatus } from "../generated/prisma/index.js";
-import { prisma } from "../lib/prisma.js";
+import {
+  prisma,
+  OrderStatus,
+  VerificationStatus,
+  StockMovementType,
+} from "../lib/prisma.js";
 import { updateOrderStatus } from "./order.service.js";
 import { computeCommission } from "./affiliate.service.js";
-import { StockMovementType } from "../generated/prisma/index.js";
 import { createStockMovement } from "./stock.service.js";
 
 export interface CODVerificationInput {
@@ -50,7 +53,7 @@ export async function verifyCODOrder(input: CODVerificationInput) {
       const commission = computeCommission(
         order.finalAmount,
         order.affiliate.commissionType,
-        order.affiliate.commissionValue
+        order.affiliate.commissionValue,
       );
       const existingEarning = await prisma.vendorEarning.findFirst({
         where: { orderId: order.id },

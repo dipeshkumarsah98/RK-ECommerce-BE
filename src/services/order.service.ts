@@ -1,5 +1,9 @@
-import { OrderStatus, PaymentStatus, StockMovementType } from "../generated/prisma/index.js";
-import { prisma } from "../lib/prisma.js";
+import {
+  prisma,
+  OrderStatus,
+  PaymentStatus,
+  StockMovementType,
+} from "../lib/prisma.js";
 import { createStockMovement } from "./stock.service.js";
 import { computeDiscount, computeCommission } from "./affiliate.service.js";
 
@@ -32,7 +36,7 @@ export async function createOrder(input: CreateOrderInput) {
       const product = productMap.get(item.productId)!;
       if (product.totalStock < item.quantity) {
         throw new Error(
-          `Insufficient stock for product "${product.title}". Available: ${product.totalStock}`
+          `Insufficient stock for product "${product.title}". Available: ${product.totalStock}`,
         );
       }
     }
@@ -65,7 +69,7 @@ export async function createOrder(input: CreateOrderInput) {
       discountAmount = computeDiscount(
         totalAmount,
         affiliateLink.discountType,
-        affiliateLink.discountValue
+        affiliateLink.discountValue,
       );
     }
 
@@ -109,7 +113,7 @@ export async function createOrder(input: CreateOrderInput) {
           orderId: order.id,
           userId: input.userId,
         },
-        tx
+        tx,
       );
     }
 
@@ -117,7 +121,12 @@ export async function createOrder(input: CreateOrderInput) {
   });
 }
 
-export async function listOrders(filters: { userId?: string; status?: OrderStatus; page?: number; limit?: number }) {
+export async function listOrders(filters: {
+  userId?: string;
+  status?: OrderStatus;
+  page?: number;
+  limit?: number;
+}) {
   const { userId, status, page = 1, limit = 20 } = filters;
   const skip = (page - 1) * limit;
 
@@ -130,7 +139,10 @@ export async function listOrders(filters: { userId?: string; status?: OrderStatu
       where,
       skip,
       take: limit,
-      include: { items: { include: { product: { select: { id: true, title: true } } } }, payment: true },
+      include: {
+        items: { include: { product: { select: { id: true, title: true } } } },
+        payment: true,
+      },
       orderBy: { createdAt: "desc" },
     }),
     prisma.order.count({ where }),
@@ -158,7 +170,7 @@ export async function getOrderById(id: string, userId?: string) {
 
 export async function updateOrderStatus(
   orderId: string,
-  newStatus: OrderStatus
+  newStatus: OrderStatus,
 ) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -189,10 +201,7 @@ export async function updateOrderStatus(
     }
   }
 
-  if (
-    newStatus === OrderStatus.COMPLETED &&
-    order.affiliateId
-  ) {
+  if (newStatus === OrderStatus.COMPLETED && order.affiliateId) {
     const affiliateLink = await prisma.affiliateLink.findUnique({
       where: { id: order.affiliateId },
     });
@@ -200,7 +209,7 @@ export async function updateOrderStatus(
       const commission = computeCommission(
         order.finalAmount,
         affiliateLink.commissionType,
-        affiliateLink.commissionValue
+        affiliateLink.commissionValue,
       );
       const existingEarning = await prisma.vendorEarning.findFirst({
         where: { orderId: order.id },

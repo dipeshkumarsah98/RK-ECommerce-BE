@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -101,8 +101,8 @@ model StockMovement {
   orderId String?
   userId  String?
 
-  order Order? @relation(fields: [orderId], references: [id])
-  user  User?  @relation(fields: [userId], references: [id])
+  order Order?  @relation(fields: [orderId], references: [id])
+  user  User?   @relation(fields: [userId], references: [id])
   notes String?
 
   createdAt DateTime @default(now())

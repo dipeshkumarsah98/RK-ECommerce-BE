@@ -1,17 +1,27 @@
 import { Router } from "express";
 import { z } from "zod";
-import { authenticate, requireRoles, AuthRequest } from "../middlewares/auth.js";
+import {
+  authenticate,
+  requireRoles,
+  AuthRequest,
+} from "../middlewares/auth.js";
 import { validate } from "../middlewares/validate.js";
-import { BadRequestError, ForbiddenError, NotFoundError } from "../lib/errors.js";
+import {
+  BadRequestError,
+  ForbiddenError,
+  NotFoundError,
+} from "../lib/errors.js";
 import {
   createOrder,
   listOrders,
   getOrderById,
   updateOrderStatus,
 } from "../services/order.service.js";
-import { OrderStatus } from "../generated/prisma/index.js";
-import { enqueueOrderConfirmation, enqueueAdminNewOrder } from "../queues/emailQueue.js";
-import { prisma } from "../lib/prisma.js";
+import {
+  enqueueOrderConfirmation,
+  enqueueAdminNewOrder,
+} from "../queues/emailQueue.js";
+import { prisma, OrderStatus } from "../lib/prisma.js";
 
 const router = Router();
 
@@ -71,48 +81,64 @@ const UpdateStatusSchema = z.object({
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post("/", validate(CreateOrderSchema), async (req: AuthRequest, res, next) => {
-  try {
-    const order = await createOrder({
-      ...req.body,
-      userId: req.user?.userId,
-    });
+router.post(
+  "/",
+  validate(CreateOrderSchema),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const order = await createOrder({
+        ...req.body,
+        userId: req.user?.userId,
+      });
 
-    // Queue emails asynchronously — don't await to keep response fast
-    const customerEmail = req.user?.userId
-      ? await prisma.user.findUnique({ where: { id: req.user.userId }, select: { email: true } }).then((u) => u?.email)
-      : undefined;
+      // Queue emails asynchronously — don't await to keep response fast
+      const customerEmail = req.user?.userId
+        ? await prisma.user
+            .findUnique({
+              where: { id: req.user.userId },
+              select: { email: true },
+            })
+            .then((u) => u?.email)
+        : undefined;
 
-    const itemsWithTitles = await Promise.all(
-      order.items.map(async (item) => {
-        const product = await prisma.product.findUnique({ where: { id: item.productId }, select: { title: true } });
-        return { title: product?.title ?? item.productId, quantity: item.quantity, price: item.price };
-      })
-    );
+      const itemsWithTitles = await Promise.all(
+        order.items.map(async (item) => {
+          const product = await prisma.product.findUnique({
+            where: { id: item.productId },
+            select: { title: true },
+          });
+          return {
+            title: product?.title ?? item.productId,
+            quantity: item.quantity,
+            price: item.price,
+          };
+        }),
+      );
 
-    if (customerEmail) {
-      enqueueOrderConfirmation({
-        to: customerEmail,
+      if (customerEmail) {
+        enqueueOrderConfirmation({
+          to: customerEmail,
+          orderId: order.id,
+          finalAmount: order.finalAmount,
+          paymentMethod: order.paymentMethod,
+          items: itemsWithTitles,
+        }).catch(() => {});
+      }
+
+      enqueueAdminNewOrder({
         orderId: order.id,
         finalAmount: order.finalAmount,
         paymentMethod: order.paymentMethod,
-        items: itemsWithTitles,
+        customerEmail,
       }).catch(() => {});
+
+      res.status(201).json(order);
+    } catch (err: unknown) {
+      if (err instanceof Error) next(new BadRequestError(err.message));
+      else next(err);
     }
-
-    enqueueAdminNewOrder({
-      orderId: order.id,
-      finalAmount: order.finalAmount,
-      paymentMethod: order.paymentMethod,
-      customerEmail,
-    }).catch(() => {});
-
-    res.status(201).json(order);
-  } catch (err: unknown) {
-    if (err instanceof Error) next(new BadRequestError(err.message));
-    else next(err);
-  }
-});
+  },
+);
 
 /**
  * @openapi
@@ -166,7 +192,9 @@ router.get("/", authenticate, async (req: AuthRequest, res, next) => {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
     const status = req.query.status as OrderStatus | undefined;
-    const userId = isAdmin ? (req.query.user_id as string | undefined) : req.user!.userId;
+    const userId = isAdmin
+      ? (req.query.user_id as string | undefined)
+      : req.user!.userId;
     const result = await listOrders({ userId, status, page, limit });
     res.json(result);
   } catch (err) {
@@ -205,10 +233,14 @@ router.get("/", authenticate, async (req: AuthRequest, res, next) => {
 router.get("/:id", authenticate, async (req: AuthRequest, res, next) => {
   try {
     const isAdmin = req.user!.roles.includes("admin");
-    const order = await getOrderById(req.params.id, isAdmin ? undefined : req.user!.userId);
+    const order = await getOrderById(
+      req.params.id,
+      isAdmin ? undefined : req.user!.userId,
+    );
     res.json(order);
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === "Forbidden") next(new ForbiddenError());
+    if (err instanceof Error && err.message === "Forbidden")
+      next(new ForbiddenError());
     else next(new NotFoundError("Order not found"));
   }
 });
@@ -267,7 +299,7 @@ router.patch(
       if (err instanceof Error) next(new BadRequestError(err.message));
       else next(err);
     }
-  }
+  },
 );
 
 export default router;

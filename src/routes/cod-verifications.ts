@@ -1,10 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
-import { authenticate, requireRoles, AuthRequest } from "../middlewares/auth.js";
+import {
+  authenticate,
+  requireRoles,
+  AuthRequest,
+} from "../middlewares/auth.js";
 import { validate } from "../middlewares/validate.js";
 import { BadRequestError } from "../lib/errors.js";
 import { verifyCODOrder } from "../services/cod.service.js";
-import { VerificationStatus } from "../generated/prisma/index.js";
+import { VerificationStatus } from "../lib/prisma.js";
 
 const router = Router();
 
@@ -76,7 +80,7 @@ router.post(
       if (err instanceof Error) next(new BadRequestError(err.message));
       else next(err);
     }
-  }
+  },
 );
 
 export default router;

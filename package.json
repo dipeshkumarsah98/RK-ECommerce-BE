@@ -10,12 +10,18 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prisma:generate": "prisma generate --config ./prisma.config.ts",
     "prisma:push": "prisma db push --config ./prisma.config.ts",
-    "prisma:migrate": "prisma migrate dev --config ./prisma.config.ts"
+    "prisma:migrate": "prisma migrate dev --config ./prisma.config.ts",
+    "prisma:deploy": "prisma migrate deploy --config ./prisma.config.ts",
+    "prisma:seed": "tsx prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.6.0",
     "@prisma/client": "^7.6.0",
     "@prisma/client-runtime-utils": "^7.6.0",
+    "@types/node": "^25.3.3",
     "bullmq": "^5.71.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2",
@@ -24,15 +30,15 @@
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.4",
+    "pg": "^8.20.0",
     "pino": "^9",
     "pino-http": "^10",
+    "prettier": "^3.8.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "zod": "3.25.76",
     "tsx": "^4.21.0",
     "typescript": "~5.9.2",
-    "prettier": "^3.8.1",
-    "@types/node": "^25.3.3"
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

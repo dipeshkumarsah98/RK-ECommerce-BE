@@ -1,5 +1,4 @@
-import { StockMovementType } from "../generated/prisma/index.js";
-import { prisma } from "../lib/prisma.js";
+import { prisma, StockMovementType } from "../lib/prisma.js";
 
 export type StockReason =
   | "RESTOCK"
@@ -20,7 +19,7 @@ export interface CreateStockMovementInput {
 
 export async function createStockMovement(
   input: CreateStockMovementInput,
-  tx?: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+  tx?: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
 ) {
   const client = tx ?? prisma;
 
@@ -32,7 +31,7 @@ export async function createStockMovement(
   if (input.type === StockMovementType.OUT) {
     if (product.totalStock < input.quantity) {
       throw new Error(
-        `Insufficient stock. Available: ${product.totalStock}, Requested: ${input.quantity}`
+        `Insufficient stock. Available: ${product.totalStock}, Requested: ${input.quantity}`,
       );
     }
   }

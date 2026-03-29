@@ -3,3 +3,4 @@
 .env
 src/generated
 src/generated/
+generated/

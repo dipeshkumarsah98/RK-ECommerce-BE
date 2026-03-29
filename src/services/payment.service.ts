@@ -1,5 +1,4 @@
-import { OrderStatus, PaymentStatus } from "../generated/prisma/index.js";
-import { prisma } from "../lib/prisma.js";
+import { prisma, OrderStatus, PaymentStatus } from "../lib/prisma.js";
 import { updateOrderStatus } from "./order.service.js";
 
 export interface InitiatePaymentInput {
@@ -33,10 +32,16 @@ export async function initiatePayment(input: InitiatePaymentInput) {
 
 function buildPaymentUrl(
   provider: string,
-  opts: { orderId: string; amount: number; returnUrl: string; failureUrl?: string }
+  opts: {
+    orderId: string;
+    amount: number;
+    returnUrl: string;
+    failureUrl?: string;
+  },
 ): string {
   if (provider === "ESEWA") {
-    const baseUrl = process.env.ESEWA_BASE_URL || "https://uat.esewa.com.np/epay/main";
+    const baseUrl =
+      process.env.ESEWA_BASE_URL || "https://uat.esewa.com.np/epay/main";
     const params = new URLSearchParams({
       amt: String(opts.amount),
       psc: "0",

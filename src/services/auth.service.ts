@@ -21,8 +21,11 @@ export async function sendOtp(email: string): Promise<void> {
 
 export async function verifyOtp(
   email: string,
-  code: string
-): Promise<{ token: string; user: { id: string; email: string; roles: string[] } }> {
+  code: string,
+): Promise<{
+  token: string;
+  user: { id: string; email: string; roles: string[] };
+}> {
   const otpRecord = await prisma.otpCode.findFirst({
     where: {
       email,
