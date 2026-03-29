@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StockMovementType {
+  IN
+  OUT
+}
+
+enum OrderStatus {
+  PENDING
+  AWAITING_VERIFICATION
+  VERIFIED
+  PROCESSING
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum VerificationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+model User {
+  id      String  @id @default(uuid())
+  email   String  @unique
+  phone   String?
+  address String?
+
+  roles String[]
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  orders         Order[]
+  affiliates     AffiliateLink[]
+  earnings       VendorEarning[]
+  verifications  CODVerification[] @relation("AdminVerification")
+  stockMovements StockMovement[]
+
+  @@index([email])
+  @@map("tbl_users")
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("tbl_otp_codes")
+}
+
+model Product {
+  id          String  @id @default(uuid())
+  slug        String  @unique
+  title       String
+  description String?
+  price       Float
+
+  totalStock Int @default(0)
+
+  status String
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  movements  StockMovement[]
+  orderItems OrderItem[]
+  affiliates AffiliateLink[]
+
+  @@index([slug])
+  @@map("tbl_products")
+}
+
+model StockMovement {
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  type     StockMovementType
+  quantity Int
+
+  reason  String
+  orderId String?
+  userId  String?
+
+  order Order? @relation(fields: [orderId], references: [id])
+  user  User?  @relation(fields: [userId], references: [id])
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([orderId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("tbl_stock_movements")
+}
+
+model AffiliateLink {
+  id   String @id @default(uuid())
+  code String @unique
+
+  vendorId String
+  vendor   User   @relation(fields: [vendorId], references: [id])
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  discountType  String
+  discountValue Float
+
+  commissionType  String
+  commissionValue Float
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  orders         Order[]
+  vendorEarnings VendorEarning[]
+
+  @@index([code])
+  @@index([vendorId])
+  @@index([productId])
+  @@map("tbl_affiliate_links")
+}
+
+model Order {
+  id     String  @id @default(uuid())
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  affiliateId String?
+  affiliate   AffiliateLink? @relation(fields: [affiliateId], references: [id])
+
+  totalAmount    Float
+  discountAmount Float
+  finalAmount    Float
+
+  paymentMethod String
+  status        OrderStatus
+
+  createdAt DateTime @default(now())
+
+  items          OrderItem[]
+  payment        Payment?
+  verification   CODVerification?
+  earnings       VendorEarning[]
+  stockMovements StockMovement[]
+
+  @@index([userId])
+  @@index([affiliateId])
+  @@index([status])
+  @@map("tbl_orders")
+}
+
+model OrderItem {
+  id      String @id @default(uuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  quantity Int
+  price    Float
+  total    Float
+
+  @@map("tbl_order_items")
+}
+
+model Payment {
+  id      String @id @default(uuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  provider String
+
+  amount Float
+
+  transactionId String?
+
+  status PaymentStatus
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@map("tbl_payments")
+}
+
+model CODVerification {
+  id String @id @default(uuid())
+
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  verifiedBy String
+  admin      User   @relation("AdminVerification", fields: [verifiedBy], references: [id])
+
+  verificationStatus VerificationStatus
+  customerResponse   String
+
+  remarks String?
+
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([orderId])
+  @@index([verifiedBy])
+  @@map("tbl_cod_verifications")
+}
+
+model VendorEarning {
+  id String @id @default(uuid())
+
+  vendorId String
+  vendor   User   @relation(fields: [vendorId], references: [id])
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  affiliateId String
+  affiliate   AffiliateLink @relation(fields: [affiliateId], references: [id])
+
+  commission Float
+
+  createdAt DateTime @default(now())
+
+  @@index([vendorId])
+  @@index([orderId])
+  @@index([affiliateId])
+  @@map("tbl_vendor_earnings")
+}
