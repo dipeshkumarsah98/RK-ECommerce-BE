@@ -18,6 +18,8 @@ const CreateProductSchema = z.object({
   description: z.string().optional(),
   price: z.number().positive(),
   status: z.string().min(1),
+  images: z.array(z.string().url()).optional(),
+  stock: z.number().int().nonnegative().optional(),
 });
 
 const UpdateProductSchema = CreateProductSchema.partial();
@@ -36,7 +38,7 @@ const UpdateProductSchema = CreateProductSchema.partial();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [slug, title, price, status]
+ *             required: [slug, title, price, status, images]
  *             properties:
  *               slug:
  *                 type: string
@@ -48,6 +50,13 @@ const UpdateProductSchema = CreateProductSchema.partial();
  *                 type: number
  *               status:
  *                 type: string
+ *               stock:
+ *                type: integer
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: url
  *     responses:
  *       201:
  *         description: Product created
@@ -64,39 +73,56 @@ const UpdateProductSchema = CreateProductSchema.partial();
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post("/", authenticate, requireRoles("admin"), validate(CreateProductSchema), async (req, res, next) => {
-  try {
-    const product = await createProduct(req.body);
-    res.status(201).json(product);
-  } catch (err: unknown) {
-    if (err instanceof Error && err.message.includes("already exists")) {
-      next(new ConflictError(err.message));
-    } else {
-      next(err);
+router.post(
+  "/",
+  authenticate,
+  requireRoles("admin"),
+  validate(CreateProductSchema),
+  async (req, res, next) => {
+    try {
+      const product = await createProduct({
+        ...req.body,
+        user: (req as any).user, // user is guaranteed to be present due to authenticate middleware
+      });
+      res.status(201).json(product);
+    } catch (err: unknown) {
+      console.log("Error creating product:", err);
+      if (err instanceof Error && err.message.includes("already exists")) {
+        next(new ConflictError(err.message));
+      } else {
+        next(err);
+      }
     }
-  }
-});
+  },
+);
 
 /**
  * @openapi
  * /products:
  *   get:
  *     tags: [Products]
- *     summary: List all products
+ *     summary: List all products with optional search
  *     parameters:
  *       - in: query
  *         name: page
  *         schema:
  *           type: integer
  *           default: 1
+ *         description: Page number for pagination
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
  *           default: 20
+ *         description: Number of items per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search query to filter products by title, description, or slug (case-insensitive)
  *     responses:
  *       200:
- *         description: Paginated product list
+ *         description: Paginated product list with optional search results
  *         content:
  *           application/json:
  *             schema:
@@ -108,12 +134,16 @@ router.post("/", authenticate, requireRoles("admin"), validate(CreateProductSche
  *                       type: array
  *                       items:
  *                         $ref: '#/components/schemas/Product'
+ *                     search:
+ *                       type: string
+ *                       description: The search query used (if any)
  */
 router.get("/", async (req, res, next) => {
   try {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
-    const result = await listProducts(page, limit);
+    const search = req.query.search as string | undefined;
+    const result = await listProducts(page, limit, search);
     res.json(result);
   } catch (err) {
     next(err);
@@ -198,13 +228,19 @@ router.get("/:id", async (req, res, next) => {
  *       404:
  *         description: Product not found
  */
-router.patch("/:id", authenticate, requireRoles("admin"), validate(UpdateProductSchema), async (req, res, next) => {
-  try {
-    const product = await updateProduct(req.params.id, req.body);
-    res.json(product);
-  } catch {
-    next(new NotFoundError("Product not found"));
-  }
-});
+router.patch(
+  "/:id",
+  authenticate,
+  requireRoles("admin"),
+  validate(UpdateProductSchema),
+  async (req, res, next) => {
+    try {
+      const product = await updateProduct(req.params.id, req.body);
+      res.json(product);
+    } catch {
+      next(new NotFoundError("Product not found"));
+    }
+  },
+);
 
 export default router;

@@ -1,6 +1,12 @@
+import { isDev } from "./constant.js";
 import { logger } from "./logger.js";
 
 export async function sendOtpEmail(email: string, otp: string): Promise<void> {
+  if (isDev) {
+    logger.info(`DEV MODE: OTP for ${email} is ${otp}`);
+    return;
+  }
+
   const nodemailer = await import("nodemailer");
   const transporter = nodemailer.default.createTransport({
     host: process.env.SMTP_HOST,

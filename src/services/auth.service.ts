@@ -3,6 +3,7 @@ import { generateOtp, otpExpiresAt } from "../lib/otp.js";
 import { sendOtpEmail } from "../lib/email.js";
 import { signToken } from "../lib/jwt.js";
 import { BadRequestError } from "../lib/errors.js";
+import { isDev } from "../lib/constant.js";
 
 export async function sendOtp(email: string): Promise<void> {
   // check if email exists or not
@@ -16,7 +17,7 @@ export async function sendOtp(email: string): Promise<void> {
     data: { used: true },
   });
 
-  const code = generateOtp();
+  const code = isDev ? "123456" : generateOtp();
   const expiresAt = otpExpiresAt();
 
   await prisma.otpCode.create({

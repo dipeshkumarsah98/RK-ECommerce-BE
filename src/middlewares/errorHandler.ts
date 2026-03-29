@@ -6,10 +6,11 @@ export function errorHandler(
   err: unknown,
   req: Request,
   res: Response,
-  _next: NextFunction
+  _next: NextFunction,
 ): void {
   if (err instanceof ZodError) {
     res.status(400).json({
+      success: false,
       error: "Validation failed",
       details: err.flatten(),
     });
@@ -20,10 +21,16 @@ export function errorHandler(
     if (!err.isOperational) {
       req.log.error({ err }, "Unexpected operational error");
     }
-    res.status(err.statusCode).json({ error: err.message });
+    res.status(err.statusCode).json({
+      success: false,
+      error: err.message,
+    });
     return;
   }
 
   req.log.error({ err }, "Unhandled error");
-  res.status(500).json({ error: "Internal server error" });
+  res.status(500).json({
+    success: false,
+    error: "Internal server error",
+  });
 }

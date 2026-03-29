@@ -45,6 +45,8 @@ model User {
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 
+  extras Json?
+
   orders         Order[]
   affiliates     AffiliateLink[]
   earnings       VendorEarning[]
@@ -68,11 +70,12 @@ model OtpCode {
 }
 
 model Product {
-  id          String  @id @default(uuid())
-  slug        String  @unique
+  id          String   @id @default(uuid())
+  slug        String   @unique
   title       String
   description String?
   price       Float
+  images      String[] // Array of image URLs
 
   totalStock Int @default(0)
 

@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { z } from "zod";
 import {
   authenticate,
   requireRoles,
@@ -11,23 +10,11 @@ import {
   listStockMovements,
 } from "../services/stock.service.js";
 import { BadRequestError } from "../lib/errors.js";
-import { StockMovementType } from "../lib/prisma.js";
+import { StockMovementPayloadSchema } from "../types/stock-movement.type.js";
 
 const router = Router();
 
-const CreateMovementSchema = z.object({
-  productId: z.string().uuid(),
-  type: z.nativeEnum(StockMovementType),
-  quantity: z.number().int().positive(),
-  reason: z.enum([
-    "RESTOCK",
-    "ORDER_PLACED",
-    "ORDER_CANCELLED",
-    "RETURN",
-    "CORRECTION",
-  ]),
-  notes: z.string().optional(),
-});
+const CreateMovementSchema = StockMovementPayloadSchema;
 
 /**
  * @openapi

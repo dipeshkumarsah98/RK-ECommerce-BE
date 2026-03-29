@@ -7,6 +7,7 @@ import {
 import { updateOrderStatus } from "./order.service.js";
 import { computeCommission } from "./affiliate.service.js";
 import { createStockMovement } from "./stock.service.js";
+import { StockReason } from "../types/stock-movement.type.js";
 
 export interface CODVerificationInput {
   orderId: string;
@@ -77,7 +78,7 @@ export async function verifyCODOrder(input: CODVerificationInput) {
         productId: item.productId,
         type: StockMovementType.IN,
         quantity: item.quantity,
-        reason: "ORDER_CANCELLED",
+        reason: StockReason.ORDER_CANCELLED,
         orderId: order.id,
         userId: input.adminId,
         notes: "COD verification rejected",

@@ -1,5 +1,4 @@
 import express, { type Express } from "express";
-import cors from "cors";
 import pinoHttp from "pino-http";
 import swaggerUi from "swagger-ui-express";
 import router from "./routes/index.js";

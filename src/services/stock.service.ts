@@ -1,25 +1,17 @@
 import { prisma, StockMovementType } from "../lib/prisma.js";
+import type { PrismaTransactionClient } from "../types/prisma.type.js";
+import type { StockMovementPayload } from "../types/stock-movement.type.js";
 
-export type StockReason =
-  | "RESTOCK"
-  | "ORDER_PLACED"
-  | "ORDER_CANCELLED"
-  | "RETURN"
-  | "CORRECTION";
+export { StockReason } from "../types/stock-movement.type.js";
 
-export interface CreateStockMovementInput {
-  productId: string;
-  type: StockMovementType;
-  quantity: number;
-  reason: StockReason;
+export interface CreateStockMovementInput extends StockMovementPayload {
   orderId?: string;
   userId?: string;
-  notes?: string;
 }
 
 export async function createStockMovement(
   input: CreateStockMovementInput,
-  tx?: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx?: PrismaTransactionClient,
 ) {
   const client = tx ?? prisma;
 
@@ -42,26 +34,24 @@ export async function createStockMovement(
       type: input.type,
       quantity: input.quantity,
       reason: input.reason,
-      orderId: input.orderId,
-      userId: input.userId,
-      notes: input.notes,
+      ...(input.userId && { userId: input.userId }),
+      ...(input.orderId && { orderId: input.orderId }),
+      ...(input.notes && { notes: input.notes }),
     },
   });
-
-  const delta =
-    input.type === StockMovementType.IN ? input.quantity : -input.quantity;
-  await client.product.update({
-    where: { id: input.productId },
-    data: { totalStock: { increment: delta } },
-  });
-
   return movement;
 }
 
 export async function listStockMovements(productId?: string) {
-  return prisma.stockMovement.findMany({
+  const items = await prisma.stockMovement.findMany({
     where: productId ? { productId } : undefined,
     include: { product: { select: { id: true, title: true, slug: true } } },
     orderBy: { createdAt: "desc" },
   });
+
+  return {
+    items,
+    total: items.length,
+    success: true,
+  };
 }

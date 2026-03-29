@@ -1,23 +1,20 @@
 import { Router } from "express";
-import { z } from "zod";
-import { authenticate, requireRoles, AuthRequest } from "../middlewares/auth.js";
+import {
+  authenticate,
+  requireRoles,
+  AuthRequest,
+} from "../middlewares/auth.js";
 import { validate } from "../middlewares/validate.js";
 import { BadRequestError, NotFoundError } from "../lib/errors.js";
 import {
   createAffiliateLink,
   listVendorAffiliates,
   getAffiliateLinkByCode,
+  generateAffiliateCode,
 } from "../services/affiliate.service.js";
+import { CreateVendorAffiliateLinkSchema } from "../types/affiliate.type.js";
 
 const router = Router();
-
-const CreateAffiliateLinkSchema = z.object({
-  productId: z.string().uuid().optional(),
-  discountType: z.enum(["PERCENTAGE", "FIXED"]),
-  discountValue: z.number().min(0),
-  commissionType: z.enum(["PERCENTAGE", "FIXED"]),
-  commissionValue: z.number().min(0),
-});
 
 /**
  * @openapi
@@ -34,25 +31,51 @@ const CreateAffiliateLinkSchema = z.object({
  *         application/json:
  *           schema:
  *             type: object
- *             required: [discountType, discountValue, commissionType, commissionValue]
+ *             required: [vendor, affiliate]
  *             properties:
- *               productId:
- *                 type: string
- *                 format: uuid
- *                 description: Optionally tie link to a specific product
- *               discountType:
- *                 type: string
- *                 enum: [PERCENTAGE, FIXED]
- *               discountValue:
- *                 type: number
- *               commissionType:
- *                 type: string
- *                 enum: [PERCENTAGE, FIXED]
- *               commissionValue:
- *                 type: number
+ *               vendor:
+ *                 type: object
+ *                 required: [name, email, affiliateType]
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                   email:
+ *                     type: string
+ *                     format: email
+ *                   affiliateType:
+ *                     type: string
+ *                     enum: [INFLUENCER, RESELLER, REFERRAL, PARTNER]
+ *                   contact:
+ *                     type: string
+ *                   address:
+ *                     type: string
+ *                   bankName:
+ *                     type: string
+ *                   accountNumber:
+ *                     type: string
+ *               affiliate:
+ *                 type: object
+ *                 required: [discountType, discountValue, commissionType, commissionValue]
+ *                 properties:
+ *                   productId:
+ *                     type: string
+ *                     format: uuid
+ *                   code:
+ *                     type: string
+ *                     description: Optional pre-generated code. Auto-generated if omitted.
+ *                   discountType:
+ *                     type: string
+ *                     enum: [PERCENTAGE, FIXED]
+ *                   discountValue:
+ *                     type: number
+ *                   commissionType:
+ *                     type: string
+ *                     enum: [PERCENTAGE, FIXED]
+ *                   commissionValue:
+ *                     type: number
  *     responses:
  *       201:
- *         description: Affiliate link created
+ *         description: Affiliate link created with vendor upserted
  *         content:
  *           application/json:
  *             schema:
@@ -63,17 +86,17 @@ const CreateAffiliateLinkSchema = z.object({
 router.post(
   "/",
   authenticate,
-  requireRoles("vendor", "admin"),
-  validate(CreateAffiliateLinkSchema),
+  requireRoles("admin"),
+  validate(CreateVendorAffiliateLinkSchema),
   async (req: AuthRequest, res, next) => {
     try {
-      const link = await createAffiliateLink({ ...req.body, vendorId: req.user!.userId });
+      const link = await createAffiliateLink(req.body);
       res.status(201).json(link);
     } catch (err: unknown) {
       if (err instanceof Error) next(new BadRequestError(err.message));
       else next(err);
     }
-  }
+  },
 );
 
 /**
@@ -94,14 +117,19 @@ router.post(
  *               items:
  *                 $ref: '#/components/schemas/AffiliateLink'
  */
-router.get("/", authenticate, requireRoles("vendor", "admin"), async (req: AuthRequest, res, next) => {
-  try {
-    const links = await listVendorAffiliates(req.user!.userId);
-    res.json(links);
-  } catch (err) {
-    next(err);
-  }
-});
+router.get(
+  "/",
+  authenticate,
+  requireRoles("vendor", "admin"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const links = await listVendorAffiliates(req.user!.userId);
+      res.json(links);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 /**
  * @openapi
@@ -131,6 +159,40 @@ router.get("/", authenticate, requireRoles("vendor", "admin"), async (req: AuthR
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
+/**
+ * @openapi
+ * /affiliates/generate-code:
+ *   get:
+ *     tags: [Affiliates]
+ *     summary: Generate a unique affiliate code (admin only)
+ *     description: Returns a unique, unused affiliate code that can be passed as `affiliate.code` when creating a link.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Generated code
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 code:
+ *                   type: string
+ */
+router.get(
+  "/generate-code",
+  authenticate,
+  requireRoles("admin"),
+  async (_req, res, next) => {
+    try {
+      const code = await generateAffiliateCode();
+      res.json({ code });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 router.get("/:code", async (req, res, next) => {
   try {
     const link = await getAffiliateLinkByCode(req.params.code);

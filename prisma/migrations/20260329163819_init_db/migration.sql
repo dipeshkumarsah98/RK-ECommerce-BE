@@ -42,6 +42,7 @@ CREATE TABLE "tbl_products" (
     "title" TEXT NOT NULL,
     "description" TEXT,
     "price" DOUBLE PRECISION NOT NULL,
+    "images" TEXT[],
     "totalStock" INTEGER NOT NULL DEFAULT 0,
     "status" TEXT NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -266,6 +267,7 @@ ALTER TABLE "tbl_vendor_earnings" ADD CONSTRAINT "tbl_vendor_earnings_orderId_fk
 ALTER TABLE "tbl_vendor_earnings" ADD CONSTRAINT "tbl_vendor_earnings_affiliateId_fkey" FOREIGN KEY ("affiliateId") REFERENCES "tbl_affiliate_links"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 
+
 -- ============================================
 -- CLEANUP (DROP IF EXISTS)
 -- ============================================
@@ -278,18 +280,18 @@ DROP TRIGGER IF EXISTS trg_prevent_negative_stock ON tbl_stock_movements;
 DROP FUNCTION IF EXISTS stock_movement_after_insert();
 DROP FUNCTION IF EXISTS stock_movement_after_update();
 DROP FUNCTION IF EXISTS stock_movement_after_delete();
-DROP FUNCTION IF EXISTS update_product_total_stock(UUID);
+DROP FUNCTION IF EXISTS update_product_total_stock(TEXT);
 DROP FUNCTION IF EXISTS prevent_negative_stock();
 
 -- ============================================
 -- 1. FUNCTION: Recalculate total_stock
 -- ============================================
 
-CREATE OR REPLACE FUNCTION update_product_total_stock(p_product_id UUID)
+CREATE OR REPLACE FUNCTION update_product_total_stock(p_product_id TEXT)
 RETURNS VOID AS $$
 BEGIN
   UPDATE tbl_products
-  SET total_stock = COALESCE((
+  SET "totalStock" = COALESCE((
     SELECT SUM(
       CASE
         WHEN type = 'IN' THEN quantity
@@ -297,7 +299,7 @@ BEGIN
       END
     )
     FROM tbl_stock_movements
-    WHERE product_id = p_product_id
+    WHERE "productId" = p_product_id
   ), 0)
   WHERE id = p_product_id;
 END;
@@ -310,7 +312,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION stock_movement_after_insert()
 RETURNS TRIGGER AS $$
 BEGIN
-  PERFORM update_product_total_stock(NEW.product_id);
+  PERFORM update_product_total_stock(NEW."productId");
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -322,10 +324,10 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION stock_movement_after_update()
 RETURNS TRIGGER AS $$
 BEGIN
-  PERFORM update_product_total_stock(NEW.product_id);
+  PERFORM update_product_total_stock(NEW."productId");
 
-  IF OLD.product_id IS DISTINCT FROM NEW.product_id THEN
-    PERFORM update_product_total_stock(OLD.product_id);
+  IF OLD."productId" IS DISTINCT FROM NEW."productId" THEN
+    PERFORM update_product_total_stock(OLD."productId");
   END IF;
 
   RETURN NEW;
@@ -339,7 +341,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION stock_movement_after_delete()
 RETURNS TRIGGER AS $$
 BEGIN
-  PERFORM update_product_total_stock(OLD.product_id);
+  PERFORM update_product_total_stock(OLD."productId");
   RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
@@ -372,12 +374,12 @@ RETURNS TRIGGER AS $$
 DECLARE
   current_stock INT;
 BEGIN
-  SELECT total_stock INTO current_stock
+  SELECT "totalStock" INTO current_stock
   FROM tbl_products
-  WHERE id = NEW.product_id;
+  WHERE id = NEW."productId";
 
   IF NEW.type = 'OUT' AND current_stock < NEW.quantity THEN
-    RAISE EXCEPTION 'Insufficient stock for product %', NEW.product_id;
+    RAISE EXCEPTION 'Insufficient stock for product %', NEW."productId";
   END IF;
 
   RETURN NEW;

@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prisma:generate": "prisma generate --config ./prisma.config.ts",
     "prisma:push": "prisma db push --config ./prisma.config.ts",
+    "prisma:reset": "prisma migrate reset --force --config ./prisma.config.ts",
     "prisma:migrate": "prisma migrate dev --config ./prisma.config.ts",
     "prisma:deploy": "prisma migrate deploy --config ./prisma.config.ts",
     "prisma:seed": "tsx prisma/seed.ts"
@@ -28,6 +29,7 @@
     "cors": "^2",
     "dotenv": "^17.3.1",
     "express": "^5",
+    "express-async-errors": "^3.1.1",
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.4",

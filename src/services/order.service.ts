@@ -6,6 +6,7 @@ import {
 } from "../lib/prisma.js";
 import { createStockMovement } from "./stock.service.js";
 import { computeDiscount, computeCommission } from "./affiliate.service.js";
+import { StockReason } from "../types/stock-movement.type.js";
 
 export interface OrderItemInput {
   productId: string;
@@ -109,7 +110,7 @@ export async function createOrder(input: CreateOrderInput) {
           productId: item.productId,
           type: StockMovementType.OUT,
           quantity: item.quantity,
-          reason: "ORDER_PLACED",
+          reason: StockReason.ORDER_PLACED,
           orderId: order.id,
           userId: input.userId,
         },
@@ -195,7 +196,7 @@ export async function updateOrderStatus(
         productId: item.productId,
         type: StockMovementType.IN,
         quantity: item.quantity,
-        reason: "ORDER_CANCELLED",
+        reason: StockReason.ORDER_CANCELLED,
         orderId: order.id,
       });
     }
