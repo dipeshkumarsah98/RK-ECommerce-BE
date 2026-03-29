@@ -6,6 +6,7 @@ import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
 import { swaggerSpec } from "./lib/swagger.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
+import { corsHandler } from "./middlewares/cors.middleware.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -31,7 +32,7 @@ app.use(
     },
   }),
 );
-app.use(cors());
+app.use(corsHandler);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -45,6 +46,9 @@ app.use(
     },
   }),
 );
+app.get("/", (req, res) => {
+  res.send("Hello World!");
+});
 
 app.get("/api/docs.json", (_req, res) => {
   res.setHeader("Content-Type", "application/json");

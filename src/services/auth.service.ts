@@ -2,8 +2,15 @@ import { prisma } from "../lib/prisma.js";
 import { generateOtp, otpExpiresAt } from "../lib/otp.js";
 import { sendOtpEmail } from "../lib/email.js";
 import { signToken } from "../lib/jwt.js";
+import { BadRequestError } from "../lib/errors.js";
 
 export async function sendOtp(email: string): Promise<void> {
+  // check if email exists or not
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    throw new BadRequestError("Email not registered");
+  }
+
   await prisma.otpCode.updateMany({
     where: { email, used: false },
     data: { used: true },

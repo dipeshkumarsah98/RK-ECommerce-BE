@@ -79,7 +79,13 @@ const options: swaggerJsdoc.Options = {
             quantity: { type: "integer" },
             reason: {
               type: "string",
-              enum: ["RESTOCK", "ORDER_PLACED", "ORDER_CANCELLED", "RETURN", "CORRECTION"],
+              enum: [
+                "RESTOCK",
+                "ORDER_PLACED",
+                "ORDER_CANCELLED",
+                "RETURN",
+                "CORRECTION",
+              ],
             },
             orderId: { type: "string", format: "uuid", nullable: true },
             userId: { type: "string", format: "uuid", nullable: true },
@@ -175,6 +181,74 @@ const options: swaggerJsdoc.Options = {
             createdAt: { type: "string", format: "date-time" },
           },
         },
+        HealthStatus: {
+          type: "object",
+          properties: {
+            status: {
+              type: "string",
+              enum: ["healthy", "unhealthy", "degraded"],
+              example: "healthy",
+            },
+            timestamp: {
+              type: "string",
+              format: "date-time",
+              example: "2026-03-29T12:00:00.000Z",
+            },
+            uptime: {
+              type: "number",
+              example: 3600,
+              description: "Server uptime in seconds",
+            },
+            version: {
+              type: "string",
+              example: "1.0.0",
+            },
+            environment: {
+              type: "string",
+              example: "development",
+            },
+            services: {
+              type: "object",
+              properties: {
+                database: { $ref: "#/components/schemas/ServiceStatus" },
+                redis: { $ref: "#/components/schemas/ServiceStatus" },
+              },
+            },
+          },
+        },
+        ServiceStatus: {
+          type: "object",
+          properties: {
+            status: {
+              type: "string",
+              enum: ["healthy", "unhealthy"],
+              example: "healthy",
+            },
+            responseTime: {
+              type: "number",
+              example: 45,
+              description: "Response time in milliseconds",
+            },
+            error: {
+              type: "string",
+              description: "Error message if service is unhealthy",
+            },
+          },
+        },
+        BasicHealthStatus: {
+          type: "object",
+          properties: {
+            status: {
+              type: "string",
+              example: "healthy",
+            },
+            timestamp: {
+              type: "string",
+              format: "date-time",
+              example: "2026-03-29T12:00:00.000Z",
+            },
+          },
+        },
         Pagination: {
           type: "object",
           properties: {
@@ -192,24 +266,164 @@ const options: swaggerJsdoc.Options = {
       { name: "Stock", description: "Ledger-based inventory movements" },
       { name: "Orders", description: "Order lifecycle management" },
       { name: "Payments", description: "eSewa/Khalti payment integration" },
-      { name: "COD Verification", description: "Cash on Delivery verification by admin" },
-      { name: "Affiliates", description: "Affiliate link management for vendors" },
+      {
+        name: "COD Verification",
+        description: "Cash on Delivery verification by admin",
+      },
+      {
+        name: "Affiliates",
+        description: "Affiliate link management for vendors",
+      },
       { name: "Earnings", description: "Vendor commission earnings" },
       { name: "Admin", description: "Admin-only views" },
-      { name: "Health", description: "Health check" },
+      { name: "Health", description: "API health monitoring and diagnostics" },
     ],
     paths: {
       "/healthz": {
         get: {
           tags: ["Health"],
-          summary: "Health check",
-          operationId: "healthCheck",
+          summary: "Basic health check",
+          operationId: "basicHealthCheck",
+          description:
+            "Returns basic health status of the API for load balancers and monitoring systems",
           responses: {
             "200": {
-              description: "Server is healthy",
+              description: "Service is healthy",
               content: {
                 "application/json": {
-                  schema: { type: "object", properties: { status: { type: "string", example: "ok" } } },
+                  schema: { $ref: "#/components/schemas/BasicHealthStatus" },
+                },
+              },
+            },
+            "503": {
+              description: "Service is unhealthy",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/BasicHealthStatus" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/health": {
+        get: {
+          tags: ["Health"],
+          summary: "Comprehensive health check",
+          operationId: "comprehensiveHealthCheck",
+          description:
+            "Returns detailed health status including database and Redis connectivity with response times",
+          responses: {
+            "200": {
+              description: "All services are healthy",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/HealthStatus" },
+                },
+              },
+            },
+            "503": {
+              description: "One or more services are unhealthy",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/HealthStatus" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/health/database": {
+        get: {
+          tags: ["Health"],
+          summary: "Database health check",
+          operationId: "databaseHealthCheck",
+          description:
+            "Check PostgreSQL database connectivity and response time",
+          responses: {
+            "200": {
+              description: "Database is healthy",
+              content: {
+                "application/json": {
+                  schema: {
+                    allOf: [
+                      { $ref: "#/components/schemas/ServiceStatus" },
+                      {
+                        type: "object",
+                        properties: {
+                          service: { type: "string", example: "database" },
+                          timestamp: { type: "string", format: "date-time" },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+            "503": {
+              description: "Database is unhealthy",
+              content: {
+                "application/json": {
+                  schema: {
+                    allOf: [
+                      { $ref: "#/components/schemas/ServiceStatus" },
+                      {
+                        type: "object",
+                        properties: {
+                          service: { type: "string", example: "database" },
+                          timestamp: { type: "string", format: "date-time" },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/health/redis": {
+        get: {
+          tags: ["Health"],
+          summary: "Redis health check",
+          operationId: "redisHealthCheck",
+          description: "Check Redis connectivity and response time",
+          responses: {
+            "200": {
+              description: "Redis is healthy",
+              content: {
+                "application/json": {
+                  schema: {
+                    allOf: [
+                      { $ref: "#/components/schemas/ServiceStatus" },
+                      {
+                        type: "object",
+                        properties: {
+                          service: { type: "string", example: "redis" },
+                          timestamp: { type: "string", format: "date-time" },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+            "503": {
+              description: "Redis is unhealthy",
+              content: {
+                "application/json": {
+                  schema: {
+                    allOf: [
+                      { $ref: "#/components/schemas/ServiceStatus" },
+                      {
+                        type: "object",
+                        properties: {
+                          service: { type: "string", example: "redis" },
+                          timestamp: { type: "string", format: "date-time" },
+                        },
+                      },
+                    ],
+                  },
                 },
               },
             },
@@ -221,18 +435,40 @@ const options: swaggerJsdoc.Options = {
           tags: ["Auth"],
           summary: "Send OTP to email",
           operationId: "sendOtp",
-          description: "Sends a 6-digit OTP to the provided email. OTP expires in 10 minutes.",
+          description:
+            "Sends a 6-digit OTP to the provided email. OTP expires in 10 minutes.",
           requestBody: {
             required: true,
             content: {
               "application/json": {
-                schema: { type: "object", required: ["email"], properties: { email: { type: "string", format: "email" } } },
+                schema: {
+                  type: "object",
+                  required: ["email"],
+                  properties: { email: { type: "string", format: "email" } },
+                },
               },
             },
           },
           responses: {
-            "200": { description: "OTP sent", content: { "application/json": { schema: { type: "object", properties: { message: { type: "string" } } } } } },
-            "400": { description: "Validation error", content: { "application/json": { schema: { $ref: "#/components/schemas/ValidationError" } } } },
+            "200": {
+              description: "OTP sent",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { message: { type: "string" } },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Validation error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ValidationError" },
+                },
+              },
+            },
           },
         },
       },
@@ -241,7 +477,8 @@ const options: swaggerJsdoc.Options = {
           tags: ["Auth"],
           summary: "Verify OTP and receive JWT",
           operationId: "verifyOtp",
-          description: "Verifies the OTP. Creates a new user account if the email is new. Returns a JWT valid for 7 days.",
+          description:
+            "Verifies the OTP. Creates a new user account if the email is new. Returns a JWT valid for 7 days.",
           requestBody: {
             required: true,
             content: {
@@ -272,7 +509,14 @@ const options: swaggerJsdoc.Options = {
                 },
               },
             },
-            "400": { description: "Invalid OTP", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+            "400": {
+              description: "Invalid OTP",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
           },
         },
       },
@@ -282,7 +526,14 @@ const options: swaggerJsdoc.Options = {
           summary: "Get own profile",
           security: [{ bearerAuth: [] }],
           responses: {
-            "200": { description: "Current user", content: { "application/json": { schema: { $ref: "#/components/schemas/User" } } } },
+            "200": {
+              description: "Current user",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/User" },
+                },
+              },
+            },
             "401": { description: "Unauthenticated" },
           },
         },
@@ -294,12 +545,25 @@ const options: swaggerJsdoc.Options = {
             required: true,
             content: {
               "application/json": {
-                schema: { type: "object", properties: { phone: { type: "string" }, address: { type: "string" } } },
+                schema: {
+                  type: "object",
+                  properties: {
+                    phone: { type: "string" },
+                    address: { type: "string" },
+                  },
+                },
               },
             },
           },
           responses: {
-            "200": { description: "Updated user", content: { "application/json": { schema: { $ref: "#/components/schemas/User" } } } },
+            "200": {
+              description: "Updated user",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/User" },
+                },
+              },
+            },
             "401": { description: "Unauthenticated" },
           },
         },
@@ -309,9 +573,23 @@ const options: swaggerJsdoc.Options = {
           tags: ["Users"],
           summary: "Get any user by ID (admin only)",
           security: [{ bearerAuth: [] }],
-          parameters: [{ in: "path", name: "id", required: true, schema: { type: "string", format: "uuid" } }],
+          parameters: [
+            {
+              in: "path",
+              name: "id",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
           responses: {
-            "200": { description: "User", content: { "application/json": { schema: { $ref: "#/components/schemas/User" } } } },
+            "200": {
+              description: "User",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/User" },
+                },
+              },
+            },
             "403": { description: "Forbidden" },
             "404": { description: "Not found" },
           },
@@ -322,8 +600,16 @@ const options: swaggerJsdoc.Options = {
           tags: ["Products"],
           summary: "List all products",
           parameters: [
-            { in: "query", name: "page", schema: { type: "integer", default: 1 } },
-            { in: "query", name: "limit", schema: { type: "integer", default: 20 } },
+            {
+              in: "query",
+              name: "page",
+              schema: { type: "integer", default: 1 },
+            },
+            {
+              in: "query",
+              name: "limit",
+              schema: { type: "integer", default: 20 },
+            },
           ],
           responses: {
             "200": {
@@ -333,7 +619,15 @@ const options: swaggerJsdoc.Options = {
                   schema: {
                     allOf: [
                       { $ref: "#/components/schemas/Pagination" },
-                      { type: "object", properties: { items: { type: "array", items: { $ref: "#/components/schemas/Product" } } } },
+                      {
+                        type: "object",
+                        properties: {
+                          items: {
+                            type: "array",
+                            items: { $ref: "#/components/schemas/Product" },
+                          },
+                        },
+                      },
                     ],
                   },
                 },
@@ -364,8 +658,22 @@ const options: swaggerJsdoc.Options = {
             },
           },
           responses: {
-            "201": { description: "Created", content: { "application/json": { schema: { $ref: "#/components/schemas/Product" } } } },
-            "409": { description: "Slug conflict", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+            "201": {
+              description: "Created",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Product" },
+                },
+              },
+            },
+            "409": {
+              description: "Slug conflict",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
           },
         },
       },
@@ -373,9 +681,23 @@ const options: swaggerJsdoc.Options = {
         get: {
           tags: ["Products"],
           summary: "Get a product by ID",
-          parameters: [{ in: "path", name: "id", required: true, schema: { type: "string", format: "uuid" } }],
+          parameters: [
+            {
+              in: "path",
+              name: "id",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
           responses: {
-            "200": { description: "Product", content: { "application/json": { schema: { $ref: "#/components/schemas/Product" } } } },
+            "200": {
+              description: "Product",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Product" },
+                },
+              },
+            },
             "404": { description: "Not found" },
           },
         },
@@ -383,20 +705,40 @@ const options: swaggerJsdoc.Options = {
           tags: ["Products"],
           summary: "Update a product (admin only)",
           security: [{ bearerAuth: [] }],
-          parameters: [{ in: "path", name: "id", required: true, schema: { type: "string", format: "uuid" } }],
+          parameters: [
+            {
+              in: "path",
+              name: "id",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
           requestBody: {
             required: true,
             content: {
               "application/json": {
                 schema: {
                   type: "object",
-                  properties: { slug: { type: "string" }, title: { type: "string" }, description: { type: "string" }, price: { type: "number" }, status: { type: "string" } },
+                  properties: {
+                    slug: { type: "string" },
+                    title: { type: "string" },
+                    description: { type: "string" },
+                    price: { type: "number" },
+                    status: { type: "string" },
+                  },
                 },
               },
             },
           },
           responses: {
-            "200": { description: "Updated", content: { "application/json": { schema: { $ref: "#/components/schemas/Product" } } } },
+            "200": {
+              description: "Updated",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Product" },
+                },
+              },
+            },
             "404": { description: "Not found" },
           },
         },
@@ -417,7 +759,16 @@ const options: swaggerJsdoc.Options = {
                     productId: { type: "string", format: "uuid" },
                     type: { type: "string", enum: ["IN", "OUT"] },
                     quantity: { type: "integer", minimum: 1 },
-                    reason: { type: "string", enum: ["RESTOCK", "ORDER_PLACED", "ORDER_CANCELLED", "RETURN", "CORRECTION"] },
+                    reason: {
+                      type: "string",
+                      enum: [
+                        "RESTOCK",
+                        "ORDER_PLACED",
+                        "ORDER_CANCELLED",
+                        "RETURN",
+                        "CORRECTION",
+                      ],
+                    },
                     notes: { type: "string" },
                   },
                 },
@@ -425,17 +776,47 @@ const options: swaggerJsdoc.Options = {
             },
           },
           responses: {
-            "201": { description: "Movement recorded", content: { "application/json": { schema: { $ref: "#/components/schemas/StockMovement" } } } },
-            "400": { description: "Insufficient stock", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+            "201": {
+              description: "Movement recorded",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/StockMovement" },
+                },
+              },
+            },
+            "400": {
+              description: "Insufficient stock",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
           },
         },
         get: {
           tags: ["Stock"],
           summary: "List stock movements (admin only)",
           security: [{ bearerAuth: [] }],
-          parameters: [{ in: "query", name: "product_id", schema: { type: "string", format: "uuid" } }],
+          parameters: [
+            {
+              in: "query",
+              name: "product_id",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
           responses: {
-            "200": { description: "Movements", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/StockMovement" } } } } },
+            "200": {
+              description: "Movements",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/StockMovement" },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -443,7 +824,8 @@ const options: swaggerJsdoc.Options = {
         post: {
           tags: ["Orders"],
           summary: "Place an order",
-          description: "Creates an order atomically. COD orders start in AWAITING_VERIFICATION. Confirmation email queued on success.",
+          description:
+            "Creates an order atomically. COD orders start in AWAITING_VERIFICATION. Confirmation email queued on success.",
           requestBody: {
             required: true,
             content: {
@@ -452,17 +834,37 @@ const options: swaggerJsdoc.Options = {
                   type: "object",
                   required: ["paymentMethod", "items"],
                   properties: {
-                    paymentMethod: { type: "string", enum: ["ESEWA", "KHALTI", "COD"] },
+                    paymentMethod: {
+                      type: "string",
+                      enum: ["ESEWA", "KHALTI", "COD"],
+                    },
                     affiliateCode: { type: "string" },
-                    items: { type: "array", items: { $ref: "#/components/schemas/OrderItem" } },
+                    items: {
+                      type: "array",
+                      items: { $ref: "#/components/schemas/OrderItem" },
+                    },
                   },
                 },
               },
             },
           },
           responses: {
-            "201": { description: "Order created", content: { "application/json": { schema: { $ref: "#/components/schemas/Order" } } } },
-            "400": { description: "Insufficient stock or invalid input", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+            "201": {
+              description: "Order created",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Order" },
+                },
+              },
+            },
+            "400": {
+              description: "Insufficient stock or invalid input",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Error" },
+                },
+              },
+            },
           },
         },
         get: {
@@ -470,10 +872,38 @@ const options: swaggerJsdoc.Options = {
           summary: "List orders (own for customer, all for admin)",
           security: [{ bearerAuth: [] }],
           parameters: [
-            { in: "query", name: "page", schema: { type: "integer", default: 1 } },
-            { in: "query", name: "limit", schema: { type: "integer", default: 20 } },
-            { in: "query", name: "status", schema: { type: "string", enum: ["PENDING", "AWAITING_VERIFICATION", "VERIFIED", "PROCESSING", "SHIPPED", "COMPLETED", "CANCELLED"] } },
-            { in: "query", name: "user_id", schema: { type: "string", format: "uuid" }, description: "Admin only" },
+            {
+              in: "query",
+              name: "page",
+              schema: { type: "integer", default: 1 },
+            },
+            {
+              in: "query",
+              name: "limit",
+              schema: { type: "integer", default: 20 },
+            },
+            {
+              in: "query",
+              name: "status",
+              schema: {
+                type: "string",
+                enum: [
+                  "PENDING",
+                  "AWAITING_VERIFICATION",
+                  "VERIFIED",
+                  "PROCESSING",
+                  "SHIPPED",
+                  "COMPLETED",
+                  "CANCELLED",
+                ],
+              },
+            },
+            {
+              in: "query",
+              name: "user_id",
+              schema: { type: "string", format: "uuid" },
+              description: "Admin only",
+            },
           ],
           responses: {
             "200": {
@@ -483,7 +913,15 @@ const options: swaggerJsdoc.Options = {
                   schema: {
                     allOf: [
                       { $ref: "#/components/schemas/Pagination" },
-                      { type: "object", properties: { items: { type: "array", items: { $ref: "#/components/schemas/Order" } } } },
+                      {
+                        type: "object",
+                        properties: {
+                          items: {
+                            type: "array",
+                            items: { $ref: "#/components/schemas/Order" },
+                          },
+                        },
+                      },
                     ],
                   },
                 },
@@ -497,9 +935,23 @@ const options: swaggerJsdoc.Options = {
           tags: ["Orders"],
           summary: "Get a single order",
           security: [{ bearerAuth: [] }],
-          parameters: [{ in: "path", name: "id", required: true, schema: { type: "string", format: "uuid" } }],
+          parameters: [
+            {
+              in: "path",
+              name: "id",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
           responses: {
-            "200": { description: "Order", content: { "application/json": { schema: { $ref: "#/components/schemas/Order" } } } },
+            "200": {
+              description: "Order",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Order" },
+                },
+              },
+            },
             "403": { description: "Forbidden" },
             "404": { description: "Not found" },
           },
@@ -509,9 +961,17 @@ const options: swaggerJsdoc.Options = {
         patch: {
           tags: ["Orders"],
           summary: "Update order status (admin only)",
-          description: "Cancelling restores stock. Completing triggers affiliate earnings.",
+          description:
+            "Cancelling restores stock. Completing triggers affiliate earnings.",
           security: [{ bearerAuth: [] }],
-          parameters: [{ in: "path", name: "id", required: true, schema: { type: "string", format: "uuid" } }],
+          parameters: [
+            {
+              in: "path",
+              name: "id",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
           requestBody: {
             required: true,
             content: {
@@ -519,13 +979,33 @@ const options: swaggerJsdoc.Options = {
                 schema: {
                   type: "object",
                   required: ["status"],
-                  properties: { status: { type: "string", enum: ["PENDING", "AWAITING_VERIFICATION", "VERIFIED", "PROCESSING", "SHIPPED", "COMPLETED", "CANCELLED"] } },
+                  properties: {
+                    status: {
+                      type: "string",
+                      enum: [
+                        "PENDING",
+                        "AWAITING_VERIFICATION",
+                        "VERIFIED",
+                        "PROCESSING",
+                        "SHIPPED",
+                        "COMPLETED",
+                        "CANCELLED",
+                      ],
+                    },
+                  },
                 },
               },
             },
           },
           responses: {
-            "200": { description: "Updated order", content: { "application/json": { schema: { $ref: "#/components/schemas/Order" } } } },
+            "200": {
+              description: "Updated order",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Order" },
+                },
+              },
+            },
             "400": { description: "Error" },
           },
         },
@@ -557,7 +1037,14 @@ const options: swaggerJsdoc.Options = {
               description: "Payment URL",
               content: {
                 "application/json": {
-                  schema: { type: "object", properties: { paymentUrl: { type: "string" }, orderId: { type: "string" }, amount: { type: "number" } } },
+                  schema: {
+                    type: "object",
+                    properties: {
+                      paymentUrl: { type: "string" },
+                      orderId: { type: "string" },
+                      amount: { type: "number" },
+                    },
+                  },
                 },
               },
             },
@@ -595,7 +1082,8 @@ const options: swaggerJsdoc.Options = {
         post: {
           tags: ["COD Verification"],
           summary: "Verify a COD order (admin only)",
-          description: "CONFIRMED → PROCESSING + earnings. REJECTED → CANCELLED + stock restored.",
+          description:
+            "CONFIRMED → PROCESSING + earnings. REJECTED → CANCELLED + stock restored.",
           security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
@@ -603,11 +1091,21 @@ const options: swaggerJsdoc.Options = {
               "application/json": {
                 schema: {
                   type: "object",
-                  required: ["orderId", "verificationStatus", "customerResponse"],
+                  required: [
+                    "orderId",
+                    "verificationStatus",
+                    "customerResponse",
+                  ],
                   properties: {
                     orderId: { type: "string", format: "uuid" },
-                    verificationStatus: { type: "string", enum: ["PENDING", "CONFIRMED", "REJECTED"] },
-                    customerResponse: { type: "string", enum: ["intentional", "not_intentional"] },
+                    verificationStatus: {
+                      type: "string",
+                      enum: ["PENDING", "CONFIRMED", "REJECTED"],
+                    },
+                    customerResponse: {
+                      type: "string",
+                      enum: ["intentional", "not_intentional"],
+                    },
                     remarks: { type: "string" },
                   },
                 },
@@ -615,7 +1113,14 @@ const options: swaggerJsdoc.Options = {
             },
           },
           responses: {
-            "201": { description: "Verification recorded", content: { "application/json": { schema: { $ref: "#/components/schemas/CODVerification" } } } },
+            "201": {
+              description: "Verification recorded",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/CODVerification" },
+                },
+              },
+            },
           },
         },
       },
@@ -630,12 +1135,23 @@ const options: swaggerJsdoc.Options = {
               "application/json": {
                 schema: {
                   type: "object",
-                  required: ["discountType", "discountValue", "commissionType", "commissionValue"],
+                  required: [
+                    "discountType",
+                    "discountValue",
+                    "commissionType",
+                    "commissionValue",
+                  ],
                   properties: {
                     productId: { type: "string", format: "uuid" },
-                    discountType: { type: "string", enum: ["PERCENTAGE", "FIXED"] },
+                    discountType: {
+                      type: "string",
+                      enum: ["PERCENTAGE", "FIXED"],
+                    },
                     discountValue: { type: "number" },
-                    commissionType: { type: "string", enum: ["PERCENTAGE", "FIXED"] },
+                    commissionType: {
+                      type: "string",
+                      enum: ["PERCENTAGE", "FIXED"],
+                    },
                     commissionValue: { type: "number" },
                   },
                 },
@@ -643,7 +1159,14 @@ const options: swaggerJsdoc.Options = {
             },
           },
           responses: {
-            "201": { description: "Created", content: { "application/json": { schema: { $ref: "#/components/schemas/AffiliateLink" } } } },
+            "201": {
+              description: "Created",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/AffiliateLink" },
+                },
+              },
+            },
           },
         },
         get: {
@@ -651,7 +1174,17 @@ const options: swaggerJsdoc.Options = {
           summary: "List own affiliate links (vendor/admin)",
           security: [{ bearerAuth: [] }],
           responses: {
-            "200": { description: "Links", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/AffiliateLink" } } } } },
+            "200": {
+              description: "Links",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/AffiliateLink" },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -659,9 +1192,23 @@ const options: swaggerJsdoc.Options = {
         get: {
           tags: ["Affiliates"],
           summary: "Look up affiliate link by code (public)",
-          parameters: [{ in: "path", name: "code", required: true, schema: { type: "string" } }],
+          parameters: [
+            {
+              in: "path",
+              name: "code",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
           responses: {
-            "200": { description: "Link", content: { "application/json": { schema: { $ref: "#/components/schemas/AffiliateLink" } } } },
+            "200": {
+              description: "Link",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/AffiliateLink" },
+                },
+              },
+            },
             "404": { description: "Not found" },
           },
         },
@@ -680,7 +1227,10 @@ const options: swaggerJsdoc.Options = {
                     type: "object",
                     properties: {
                       totalCommission: { type: "number" },
-                      earnings: { type: "array", items: { $ref: "#/components/schemas/VendorEarning" } },
+                      earnings: {
+                        type: "array",
+                        items: { $ref: "#/components/schemas/VendorEarning" },
+                      },
                     },
                   },
                 },
@@ -695,10 +1245,22 @@ const options: swaggerJsdoc.Options = {
           summary: "List all orders with filters (admin only)",
           security: [{ bearerAuth: [] }],
           parameters: [
-            { in: "query", name: "page", schema: { type: "integer", default: 1 } },
-            { in: "query", name: "limit", schema: { type: "integer", default: 20 } },
+            {
+              in: "query",
+              name: "page",
+              schema: { type: "integer", default: 1 },
+            },
+            {
+              in: "query",
+              name: "limit",
+              schema: { type: "integer", default: 20 },
+            },
             { in: "query", name: "status", schema: { type: "string" } },
-            { in: "query", name: "user_id", schema: { type: "string", format: "uuid" } },
+            {
+              in: "query",
+              name: "user_id",
+              schema: { type: "string", format: "uuid" },
+            },
           ],
           responses: {
             "200": { description: "Orders" },
@@ -711,8 +1273,16 @@ const options: swaggerJsdoc.Options = {
           summary: "List all products (admin only)",
           security: [{ bearerAuth: [] }],
           parameters: [
-            { in: "query", name: "page", schema: { type: "integer", default: 1 } },
-            { in: "query", name: "limit", schema: { type: "integer", default: 20 } },
+            {
+              in: "query",
+              name: "page",
+              schema: { type: "integer", default: 1 },
+            },
+            {
+              in: "query",
+              name: "limit",
+              schema: { type: "integer", default: 20 },
+            },
           ],
           responses: {
             "200": { description: "Products" },
