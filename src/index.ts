@@ -28,5 +28,5 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
-  logger.info(`API docs available at http://localhost:${port}/api/docs`);
+  logger.info(`API docs available at http://localhost:${port}/docs`);
 });

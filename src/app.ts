@@ -36,7 +36,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(
-  "/api/docs",
+  "/docs",
   swaggerUi.serve,
   swaggerUi.setup(swaggerSpec, {
     customSiteTitle: "Affiliate E-Commerce API Docs",

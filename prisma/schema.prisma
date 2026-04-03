@@ -35,15 +35,17 @@ enum VerificationStatus {
 }
 
 model User {
-  id      String  @id @default(uuid())
-  email   String  @unique
-  phone   String?
-  address String?
+  id    String  @id @default(uuid())
+  name  String
+  email String  @unique
+  phone String?
 
   roles String[]
 
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
+  updatedAt DateTime  @updatedAt
+  createdAt DateTime  @default(now())
+  lastLogin DateTime?
+  isActive  Boolean   @default(true)
 
   extras Json?
 
@@ -52,9 +54,26 @@ model User {
   earnings       VendorEarning[]
   verifications  CODVerification[] @relation("AdminVerification")
   stockMovements StockMovement[]
+  addresses      Address[]
 
   @@index([email])
   @@map("tbl_users")
+}
+
+model Address {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  addressType    String // 'shipping', 'billing'
+  street_address String?
+  city           String
+  state          String?
+  postal_code    String?
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@map("tbl_addresses")
 }
 
 model OtpCode {
@@ -151,17 +170,30 @@ model Order {
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
+  orderNumber String      @unique
+  status      OrderStatus
+
   affiliateId String?
   affiliate   AffiliateLink? @relation(fields: [affiliateId], references: [id])
 
-  totalAmount    Float
+  subtotal       Float
+  taxAmount      Float
+  shippingAmount Float
   discountAmount Float
-  finalAmount    Float
+  totalAmount    Float
 
-  paymentMethod String
-  status        OrderStatus
+  currency String @default("NPR")
 
+  shippingAddressId String?
+  billingAddressId  String?
+  paymentMethod     String
+
+  notes          String?
+  additionalInfo Json? // For any extra details like delivery instructions, etc.
+
+  updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
+  createdBy String?
 
   items          OrderItem[]
   payment        Payment?
@@ -183,9 +215,9 @@ model OrderItem {
   productId String
   product   Product @relation(fields: [productId], references: [id])
 
-  quantity Int
-  price    Float
-  total    Float
+  quantity   Int
+  unitPrice  Float
+  totalPrice Float
 
   @@map("tbl_order_items")
 }
@@ -195,9 +227,11 @@ model Payment {
   orderId String @unique
   order   Order  @relation(fields: [orderId], references: [id])
 
-  provider String
+  paymentMethod String // 'credit_card', 'paypal', 'stripe', 'bank_transfer'
+  provider      String
 
-  amount Float
+  amount   Float
+  currency String @default("NPR")
 
   transactionId String?
 
@@ -245,6 +279,7 @@ model VendorEarning {
   affiliate   AffiliateLink @relation(fields: [affiliateId], references: [id])
 
   commission Float
+  currency   String @default("NPR")
 
   createdAt DateTime @default(now())
 

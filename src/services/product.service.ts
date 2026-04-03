@@ -74,9 +74,34 @@ export async function listProducts(page = 1, limit = 20, search?: string) {
 }
 
 export async function getProductById(id: string) {
-  const product = await prisma.product.findUnique({ where: { id } });
+  const product = await prisma.product.findUnique({
+    where: { id },
+    include: {
+      movements: {
+        select: {
+          type: true,
+          quantity: true,
+        },
+      },
+    },
+  });
+
   if (!product) throw new Error("Product not found");
-  return product;
+
+  // Calculate current stock from movements
+  const currentStock = product.movements.reduce((acc, movement) => {
+    return movement.type === StockMovementType.IN
+      ? acc + movement.quantity
+      : acc - movement.quantity;
+  }, 0);
+
+  // Remove movements from the response and add calculated stock
+  const { movements, ...productData } = product;
+
+  return {
+    ...productData,
+    currentStock,
+  };
 }
 
 export async function getProductBySlug(slug: string) {

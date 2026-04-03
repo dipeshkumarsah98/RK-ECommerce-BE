@@ -13,14 +13,32 @@ CREATE TYPE "VerificationStatus" AS ENUM ('PENDING', 'CONFIRMED', 'REJECTED');
 -- CreateTable
 CREATE TABLE "tbl_users" (
     "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "phone" TEXT,
-    "address" TEXT,
     "roles" TEXT[],
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastLogin" TIMESTAMP(3),
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "extras" JSONB,
 
     CONSTRAINT "tbl_users_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "tbl_addresses" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "addressType" TEXT NOT NULL,
+    "street_address" TEXT,
+    "city" TEXT NOT NULL,
+    "state" TEXT,
+    "postal_code" TEXT,
+    "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "tbl_addresses_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -86,13 +104,23 @@ CREATE TABLE "tbl_affiliate_links" (
 CREATE TABLE "tbl_orders" (
     "id" TEXT NOT NULL,
     "userId" TEXT,
-    "affiliateId" TEXT,
-    "totalAmount" DOUBLE PRECISION NOT NULL,
-    "discountAmount" DOUBLE PRECISION NOT NULL,
-    "finalAmount" DOUBLE PRECISION NOT NULL,
-    "paymentMethod" TEXT NOT NULL,
+    "orderNumber" TEXT NOT NULL,
     "status" "OrderStatus" NOT NULL,
+    "affiliateId" TEXT,
+    "subtotal" DOUBLE PRECISION NOT NULL,
+    "taxAmount" DOUBLE PRECISION NOT NULL,
+    "shippingAmount" DOUBLE PRECISION NOT NULL,
+    "discountAmount" DOUBLE PRECISION NOT NULL,
+    "totalAmount" DOUBLE PRECISION NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'NPR',
+    "shippingAddressId" TEXT,
+    "billingAddressId" TEXT,
+    "paymentMethod" TEXT NOT NULL,
+    "notes" TEXT,
+    "additionalInfo" JSONB,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdBy" TEXT,
 
     CONSTRAINT "tbl_orders_pkey" PRIMARY KEY ("id")
 );
@@ -103,8 +131,8 @@ CREATE TABLE "tbl_order_items" (
     "orderId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL,
-    "price" DOUBLE PRECISION NOT NULL,
-    "total" DOUBLE PRECISION NOT NULL,
+    "unitPrice" DOUBLE PRECISION NOT NULL,
+    "totalPrice" DOUBLE PRECISION NOT NULL,
 
     CONSTRAINT "tbl_order_items_pkey" PRIMARY KEY ("id")
 );
@@ -113,8 +141,10 @@ CREATE TABLE "tbl_order_items" (
 CREATE TABLE "tbl_payments" (
     "id" TEXT NOT NULL,
     "orderId" TEXT NOT NULL,
+    "paymentMethod" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
     "amount" DOUBLE PRECISION NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'NPR',
     "transactionId" TEXT,
     "status" "PaymentStatus" NOT NULL,
     "paidAt" TIMESTAMP(3),
@@ -144,6 +174,7 @@ CREATE TABLE "tbl_vendor_earnings" (
     "orderId" TEXT NOT NULL,
     "affiliateId" TEXT NOT NULL,
     "commission" DOUBLE PRECISION NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'NPR',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "tbl_vendor_earnings_pkey" PRIMARY KEY ("id")
@@ -154,6 +185,9 @@ CREATE UNIQUE INDEX "tbl_users_email_key" ON "tbl_users"("email");
 
 -- CreateIndex
 CREATE INDEX "tbl_users_email_idx" ON "tbl_users"("email");
+
+-- CreateIndex
+CREATE INDEX "tbl_addresses_userId_idx" ON "tbl_addresses"("userId");
 
 -- CreateIndex
 CREATE INDEX "tbl_otp_codes_email_idx" ON "tbl_otp_codes"("email");
@@ -189,6 +223,9 @@ CREATE INDEX "tbl_affiliate_links_vendorId_idx" ON "tbl_affiliate_links"("vendor
 CREATE INDEX "tbl_affiliate_links_productId_idx" ON "tbl_affiliate_links"("productId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "tbl_orders_orderNumber_key" ON "tbl_orders"("orderNumber");
+
+-- CreateIndex
 CREATE INDEX "tbl_orders_userId_idx" ON "tbl_orders"("userId");
 
 -- CreateIndex
@@ -220,6 +257,9 @@ CREATE INDEX "tbl_vendor_earnings_orderId_idx" ON "tbl_vendor_earnings"("orderId
 
 -- CreateIndex
 CREATE INDEX "tbl_vendor_earnings_affiliateId_idx" ON "tbl_vendor_earnings"("affiliateId");
+
+-- AddForeignKey
+ALTER TABLE "tbl_addresses" ADD CONSTRAINT "tbl_addresses_userId_fkey" FOREIGN KEY ("userId") REFERENCES "tbl_users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tbl_stock_movements" ADD CONSTRAINT "tbl_stock_movements_productId_fkey" FOREIGN KEY ("productId") REFERENCES "tbl_products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -265,7 +305,6 @@ ALTER TABLE "tbl_vendor_earnings" ADD CONSTRAINT "tbl_vendor_earnings_orderId_fk
 
 -- AddForeignKey
 ALTER TABLE "tbl_vendor_earnings" ADD CONSTRAINT "tbl_vendor_earnings_affiliateId_fkey" FOREIGN KEY ("affiliateId") REFERENCES "tbl_affiliate_links"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
 
 
 -- ============================================

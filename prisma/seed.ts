@@ -13,26 +13,44 @@ const prisma = new PrismaClient({
 async function main() {
   console.log("tarting database seeding...");
 
-  // Create Admin User
   const adminUser = await prisma.user.upsert({
-    where: { email: "admin@mailinator.com" },
+    where: { email: "adminUser@mailinator.com" },
     update: {},
     create: {
-      email: "admin@mailinator.com",
+      name: "Admin User",
+      email: "adminUser@mailinator.com",
       phone: "+1234567890",
-      address: "123 Admin Street, Admin City, AC 12345",
       roles: ["admin"],
+      addresses: {
+        create: {
+          addressType: "shipping",
+          street_address: "123 Admin Street",
+          city: "Admin City",
+          state: "AC",
+          postal_code: "12345",
+          isDefault: true,
+        },
+      },
     },
   });
 
-  // Create Vendor User
   const vendorUser = await prisma.user.upsert({
     where: { email: "vendor@mailinator.com" },
     update: {},
     create: {
+      name: "Vendor User",
       email: "vendor@mailinator.com",
       phone: "+1234567891",
-      address: "456 Vendor Avenue, Vendor City, VC 12345",
+      addresses: {
+        create: {
+          addressType: "shipping",
+          street_address: "456 Vendor Avenue",
+          city: "Vendor City",
+          state: "VC",
+          postal_code: "12345",
+          isDefault: true,
+        },
+      },
       roles: ["vendor"],
     },
   });
@@ -42,10 +60,20 @@ async function main() {
     where: { email: "customer@mailinator.com" },
     update: {},
     create: {
+      name: "Customer User",
       email: "customer@mailinator.com",
       phone: "+1234567892",
-      address: "789 Customer Lane, Customer City, CC 12345",
       roles: ["customer"],
+      addresses: {
+        create: {
+          addressType: "shipping",
+          street_address: "789 Customer Road",
+          city: "Customer City",
+          state: "CC",
+          postal_code: "12345",
+          isDefault: true,
+        },
+      },
     },
   });
 
@@ -53,9 +81,19 @@ async function main() {
     where: { email: "super@mailinator.com" },
     update: {},
     create: {
+      name: "Super User",
       email: "super@mailinator.com",
       phone: "+1234567893",
-      address: "999 Super Boulevard, Super City, SC 12345",
+      addresses: {
+        create: {
+          addressType: "shipping",
+          street_address: "999 Super Boulevard",
+          city: "Super City",
+          state: "SC",
+          postal_code: "12345",
+          isDefault: true,
+        },
+      },
       roles: ["admin", "vendor"],
     },
   });

@@ -10,6 +10,7 @@ import codVerificationsRouter from "./cod-verifications.js";
 import affiliatesRouter from "./affiliates.js";
 import earningsRouter from "./earnings.js";
 import adminRouter from "./admin.js";
+import addressesRouter from "./addresses.js";
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use("/cod-verifications", codVerificationsRouter);
 router.use("/affiliates", affiliatesRouter);
 router.use("/earnings", earningsRouter);
 router.use("/admin", adminRouter);
+router.use("/addresses", addressesRouter);
 
 export default router;

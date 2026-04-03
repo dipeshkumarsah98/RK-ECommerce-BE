@@ -17,11 +17,7 @@ import {
   getOrderById,
   updateOrderStatus,
 } from "../services/order.service.js";
-import {
-  enqueueOrderConfirmation,
-  enqueueAdminNewOrder,
-} from "../queues/emailQueue.js";
-import { prisma, OrderStatus } from "../lib/prisma.js";
+import { OrderStatus } from "../lib/prisma.js";
 
 const router = Router();
 
@@ -30,11 +26,38 @@ const OrderItemSchema = z.object({
   quantity: z.number().int().positive(),
 });
 
-const CreateOrderSchema = z.object({
-  affiliateCode: z.string().optional(),
-  paymentMethod: z.enum(["ESEWA", "KHALTI", "COD"]),
-  items: z.array(OrderItemSchema).min(1),
+const AddressSchema = z.object({
+  street_address: z.string().optional(),
+  city: z.string(),
+  state: z.string().optional(),
+  postal_code: z.string().optional(),
 });
+
+const CreateOrderSchema = z
+  .object({
+    // Customer info (for guest or finding existing user)
+    customerEmail: z.string().email(),
+    customerName: z.string(),
+    customerPhone: z.string().optional(),
+
+    // Override userId (admin creating on behalf of someone)
+    userId: z.string().uuid().optional(),
+
+    // Addresses (either provide IDs or full address objects)
+    shippingAddressId: z.string().uuid().optional(),
+    shippingAddress: AddressSchema.optional(),
+    billingAddressId: z.string().uuid().optional(),
+    billingAddress: AddressSchema.optional(),
+
+    // Order details
+    affiliateCode: z.string().optional(),
+    paymentMethod: z.enum(["ESEWA", "KHALTI", "COD"]),
+    items: z.array(OrderItemSchema).min(1),
+    notes: z.string().optional(),
+  })
+  .refine((data) => data.shippingAddressId || data.shippingAddress, {
+    message: "Either shippingAddressId or shippingAddress is required",
+  });
 
 const UpdateStatusSchema = z.object({
   status: z.nativeEnum(OrderStatus),
@@ -47,29 +70,82 @@ const UpdateStatusSchema = z.object({
  *     tags: [Orders]
  *     summary: Place an order
  *     description: >
- *       Creates an order atomically with stock deduction. COD orders start in AWAITING_VERIFICATION.
- *       Online payment orders start in PENDING. An order confirmation email is queued on success.
+ *       Creates an order with automatic user lookup/creation by email. Supports guest orders,
+ *       returning customers (via addressId), and admin creating orders on behalf of others (via userId).
+ *       COD orders start in AWAITING_VERIFICATION. Online payments start in PENDING.
+ *       Stock is deducted atomically. Order confirmation emails are sent to customer and admin.
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [paymentMethod, items]
+ *             required: [customerEmail, customerName, paymentMethod, items]
  *             properties:
+ *               customerEmail:
+ *                 type: string
+ *                 format: email
+ *                 description: Customer email (used to find/create user)
+ *               customerName:
+ *                 type: string
+ *                 description: Customer name
+ *               customerPhone:
+ *                 type: string
+ *                 description: Customer phone number
+ *               userId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Admin only - override to create order on behalf of specific user
+ *               shippingAddressId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Existing address ID (for returning customers)
+ *               shippingAddress:
+ *                 type: object
+ *                 description: New shipping address (required if shippingAddressId not provided)
+ *                 required: [city]
+ *                 properties:
+ *                   street_address:
+ *                     type: string
+ *                   city:
+ *                     type: string
+ *                   state:
+ *                     type: string
+ *                   postal_code:
+ *                     type: string
+ *               billingAddressId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Existing billing address ID (defaults to shipping)
+ *               billingAddress:
+ *                 type: object
+ *                 description: New billing address (defaults to shipping if not provided)
+ *                 required: [city]
+ *                 properties:
+ *                   street_address:
+ *                     type: string
+ *                   city:
+ *                     type: string
+ *                   state:
+ *                     type: string
+ *                   postal_code:
+ *                     type: string
  *               paymentMethod:
  *                 type: string
  *                 enum: [ESEWA, KHALTI, COD]
  *               affiliateCode:
  *                 type: string
- *                 description: Optional affiliate link code for discount
+ *                 description: Optional affiliate code for discount
  *               items:
  *                 type: array
  *                 items:
  *                   $ref: '#/components/schemas/OrderItem'
+ *               notes:
+ *                 type: string
+ *                 description: Additional order notes or instructions
  *     responses:
  *       201:
- *         description: Order created
+ *         description: Order created successfully
  *         content:
  *           application/json:
  *             schema:
@@ -88,49 +164,9 @@ router.post(
     try {
       const order = await createOrder({
         ...req.body,
-        userId: req.user?.userId,
+        // Admin can override userId; otherwise determined by service
+        requestingUserId: req.user?.roles,
       });
-
-      // Queue emails asynchronously — don't await to keep response fast
-      const customerEmail = req.user?.userId
-        ? await prisma.user
-            .findUnique({
-              where: { id: req.user.userId },
-              select: { email: true },
-            })
-            .then((u) => u?.email)
-        : undefined;
-
-      const itemsWithTitles = await Promise.all(
-        order.items.map(async (item) => {
-          const product = await prisma.product.findUnique({
-            where: { id: item.productId },
-            select: { title: true },
-          });
-          return {
-            title: product?.title ?? item.productId,
-            quantity: item.quantity,
-            price: item.price,
-          };
-        }),
-      );
-
-      if (customerEmail) {
-        enqueueOrderConfirmation({
-          to: customerEmail,
-          orderId: order.id,
-          finalAmount: order.finalAmount,
-          paymentMethod: order.paymentMethod,
-          items: itemsWithTitles,
-        }).catch(() => {});
-      }
-
-      enqueueAdminNewOrder({
-        orderId: order.id,
-        finalAmount: order.finalAmount,
-        paymentMethod: order.paymentMethod,
-        customerEmail,
-      }).catch(() => {});
 
       res.status(201).json(order);
     } catch (err: unknown) {
@@ -234,7 +270,7 @@ router.get("/:id", authenticate, async (req: AuthRequest, res, next) => {
   try {
     const isAdmin = req.user!.roles.includes("admin");
     const order = await getOrderById(
-      req.params.id,
+      req.params.id as string,
       isAdmin ? undefined : req.user!.userId,
     );
     res.json(order);
@@ -293,7 +329,10 @@ router.patch(
   validate(UpdateStatusSchema),
   async (req, res, next) => {
     try {
-      const order = await updateOrderStatus(req.params.id, req.body.status);
+      const order = await updateOrderStatus(
+        req.params.id as string,
+        req.body.status,
+      );
       res.json(order);
     } catch (err: unknown) {
       if (err instanceof Error) next(new BadRequestError(err.message));

@@ -56,6 +56,20 @@ const options: swaggerJsdoc.Options = {
             createdAt: { type: "string", format: "date-time" },
           },
         },
+        Address: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            userId: { type: "string", format: "uuid" },
+            addressType: { type: "string", enum: ["shipping", "billing"] },
+            street_address: { type: "string", nullable: true },
+            city: { type: "string" },
+            state: { type: "string", nullable: true },
+            postal_code: { type: "string", nullable: true },
+            isDefault: { type: "boolean" },
+            createdAt: { type: "string", format: "date-time" },
+          },
+        },
         Product: {
           type: "object",
           properties: {
@@ -262,6 +276,7 @@ const options: swaggerJsdoc.Options = {
     tags: [
       { name: "Auth", description: "OTP-based authentication" },
       { name: "Users", description: "User profile management" },
+      { name: "Addresses", description: "Address management" },
       { name: "Products", description: "Product catalogue" },
       { name: "Stock", description: "Ledger-based inventory movements" },
       { name: "Orders", description: "Order lifecycle management" },

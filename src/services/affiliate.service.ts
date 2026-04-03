@@ -1,7 +1,11 @@
 import { prisma } from "../lib/prisma.js";
 import { nanoid } from "../lib/nanoid.js";
-import type { CreateVendorAffiliateLinkPayload } from "../types/affiliate.type.js";
+import type {
+  CreateVendorAffiliateLinkPayload,
+  UpdateAffiliateLinkPayload,
+} from "../types/affiliate.type.js";
 import { DiscountType, CommissionType } from "../types/affiliate.type.js";
+import { BadRequestError, NotFoundError } from "../lib/errors.js";
 
 export {
   DiscountType,
@@ -25,20 +29,19 @@ export async function createAffiliateLink(
   return prisma.$transaction(async (tx) => {
     const { vendor, affiliate } = input;
 
-    // Resolve roles: ensure "vendor" is present without duplicates
     const existing = await tx.user.findUnique({
       where: { email: vendor.email },
       select: { roles: true, extras: true },
     });
-    const roles = existing
-      ? existing.roles.includes("vendor")
-        ? existing.roles
-        : [...existing.roles, "vendor"]
-      : ["vendor"];
+
+    const productExists = await tx.product.findUnique({
+      where: { id: affiliate.productId },
+    });
+    if (!productExists)
+      throw new BadRequestError(`Selected product does not exist`);
 
     const vendorExtras = {
       ...(existing?.extras as Record<string, any>),
-      name: vendor.name,
       affiliateType: vendor.affiliateType,
       ...(vendor.bankName && { bankName: vendor.bankName }),
       ...(vendor.accountNumber && { accountNumber: vendor.accountNumber }),
@@ -47,16 +50,14 @@ export async function createAffiliateLink(
     const vendorUser = await tx.user.upsert({
       where: { email: vendor.email },
       create: {
+        name: vendor.name,
         email: vendor.email,
         phone: vendor.contact,
-        address: vendor.address,
-        roles,
         extras: vendorExtras,
       },
       update: {
+        name: vendor.name,
         phone: vendor.contact,
-        address: vendor.address,
-        roles,
         extras: vendorExtras,
       },
     });
@@ -83,24 +84,191 @@ export async function createAffiliateLink(
   });
 }
 
-export async function listVendorAffiliates(vendorId: string) {
-  return prisma.affiliateLink.findMany({
-    where: { vendorId },
-    include: { product: { select: { id: true, title: true, slug: true } } },
-    orderBy: { createdAt: "desc" },
-  });
+export interface ListAffiliatesFilters {
+  vendorId?: string;
+  search?: string;
+  affiliateType?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: "createdAt" | "code" | "discountValue" | "commissionValue";
+  sortOrder?: "asc" | "desc";
+}
+
+export async function listVendorAffiliates(
+  filters: ListAffiliatesFilters = {},
+) {
+  const {
+    vendorId,
+    search,
+    affiliateType,
+    page = 1,
+    limit = 20,
+    sortBy = "createdAt",
+    sortOrder = "desc",
+  } = filters;
+
+  const skip = (page - 1) * limit;
+
+  // Build where conditions
+  const whereConditions: any = {};
+
+  // Filter by vendorId if provided
+  if (vendorId) {
+    whereConditions.vendorId = vendorId;
+  }
+
+  // Filter by affiliateType if provided
+  if (affiliateType) {
+    whereConditions.vendor = {
+      extras: {
+        path: ["affiliateType"],
+        equals: affiliateType,
+      },
+    };
+  }
+
+  // Build search conditions (search across vendor name, email, and code)
+  if (search) {
+    whereConditions.OR = [
+      { code: { contains: search, mode: "insensitive" as const } },
+      {
+        vendor: {
+          email: { contains: search, mode: "insensitive" as const },
+        },
+      },
+      {
+        vendor: {
+          extras: {
+            path: ["name"],
+            string_contains: search,
+          },
+        },
+      },
+    ];
+  }
+
+  // Build orderBy
+  const orderBy: any = {};
+  if (sortBy === "createdAt") {
+    orderBy.createdAt = sortOrder;
+  } else if (sortBy === "code") {
+    orderBy.code = sortOrder;
+  } else if (sortBy === "discountValue") {
+    orderBy.discountValue = sortOrder;
+  } else if (sortBy === "commissionValue") {
+    orderBy.commissionValue = sortOrder;
+  }
+
+  const [items, total] = await Promise.all([
+    prisma.affiliateLink.findMany({
+      where: whereConditions,
+      skip,
+      take: limit,
+      include: {
+        product: { select: { id: true, title: true, slug: true } },
+        vendor: { select: { id: true, name: true, email: true, extras: true } },
+      },
+      orderBy,
+    }),
+    prisma.affiliateLink.count({
+      where: whereConditions,
+    }),
+  ]);
+
+  // Calculate stats based on the filtered results
+  const [activeCount, inactiveCount, linkedProducts] = await Promise.all([
+    prisma.affiliateLink.count({
+      where: { ...whereConditions, isActive: true },
+    }),
+    prisma.affiliateLink.count({
+      where: { ...whereConditions, isActive: false },
+    }),
+    prisma.affiliateLink.findMany({
+      where: whereConditions,
+      select: { productId: true },
+      distinct: ["productId"],
+    }),
+  ]);
+
+  const stats = {
+    totalAffiliates: total,
+    active: activeCount,
+    inactive: inactiveCount,
+    productsLinked: linkedProducts.filter((p) => p.productId !== null).length,
+  };
+
+  return { items, total, page, limit, search, affiliateType, stats };
 }
 
 export async function getAffiliateLinkByCode(code: string) {
   const link = await prisma.affiliateLink.findUnique({
     where: { code },
-    include: {
-      product: { select: { id: true, title: true, price: true } },
+    select: {
+      code: true,
+      isActive: true,
+      discountType: true,
+      discountValue: true,
+      product: { select: { id: true, title: true } },
       vendor: { select: { id: true, email: true } },
     },
   });
   if (!link) throw new Error("Affiliate link not found");
   return link;
+}
+
+export async function getAffiliateLinkById(id: string) {
+  const link = await prisma.affiliateLink.findUnique({
+    where: { id },
+    include: {
+      product: { select: { id: true, title: true, slug: true, price: true } },
+      vendor: { select: { id: true, email: true, extras: true } },
+    },
+  });
+  if (!link) throw new NotFoundError("Affiliate link not found");
+  return link;
+}
+
+export async function updateAffiliateLink(
+  id: string,
+  data: UpdateAffiliateLinkPayload,
+) {
+  // Check if affiliate link exists
+  const existing = await prisma.affiliateLink.findUnique({
+    where: { id },
+  });
+  if (!existing) throw new NotFoundError("Affiliate link not found");
+
+  // If productId is being updated, verify it exists
+  if (data.productId) {
+    const productExists = await prisma.product.findUnique({
+      where: { id: data.productId },
+    });
+    if (!productExists) {
+      throw new BadRequestError("Selected product does not exist");
+    }
+  }
+
+  // If code is being updated, verify it's unique
+  if (data.code && data.code !== existing.code) {
+    const codeExists = await prisma.affiliateLink.findUnique({
+      where: { code: data.code },
+    });
+    if (codeExists) {
+      throw new BadRequestError("Affiliate code already exists");
+    }
+  }
+
+  // Update the affiliate link
+  const updated = await prisma.affiliateLink.update({
+    where: { id },
+    data,
+    include: {
+      product: { select: { id: true, title: true, slug: true, price: true } },
+      vendor: { select: { id: true, email: true, extras: true } },
+    },
+  });
+
+  return updated;
 }
 
 export function computeDiscount(

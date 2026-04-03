@@ -41,8 +41,20 @@ export const CreateVendorAffiliateLinkSchema = z.object({
   affiliate: AffiliateLinkInfoSchema,
 });
 
+export const UpdateAffiliateLinkSchema = z.object({
+  productId: z.string().uuid().optional(),
+  code: z.string().min(4).optional(),
+  discountType: z.nativeEnum(DiscountType).optional(),
+  discountValue: z.number().min(0).optional(),
+  commissionType: z.nativeEnum(CommissionType).optional(),
+  commissionValue: z.number().min(0).optional(),
+});
+
 export type VendorInfo = z.infer<typeof VendorInfoSchema>;
 export type AffiliateLinkInfo = z.infer<typeof AffiliateLinkInfoSchema>;
 export type CreateVendorAffiliateLinkPayload = z.infer<
   typeof CreateVendorAffiliateLinkSchema
+>;
+export type UpdateAffiliateLinkPayload = z.infer<
+  typeof UpdateAffiliateLinkSchema
 >;
