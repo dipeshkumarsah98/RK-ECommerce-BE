@@ -4,7 +4,9 @@ export async function listVendorEarnings(vendorId: string) {
   const earnings = await prisma.vendorEarning.findMany({
     where: { vendorId },
     include: {
-      order: { select: { id: true, finalAmount: true, status: true, createdAt: true } },
+      order: {
+        select: { id: true, totalAmount: true, status: true, createdAt: true },
+      },
       affiliate: { select: { id: true, code: true } },
     },
     orderBy: { createdAt: "desc" },

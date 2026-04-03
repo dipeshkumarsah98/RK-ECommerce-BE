@@ -36,10 +36,15 @@ export const AffiliateLinkInfoSchema = z.object({
   commissionValue: z.number().min(0),
 });
 
-export const CreateVendorAffiliateLinkSchema = z.object({
-  vendor: VendorInfoSchema,
-  affiliate: AffiliateLinkInfoSchema,
-});
+export const CreateVendorAffiliateLinkSchema = z
+  .object({
+    vendorId: z.string().uuid().optional(),
+    vendor: VendorInfoSchema.optional(),
+    affiliate: AffiliateLinkInfoSchema,
+  })
+  .refine((data) => data.vendorId || data.vendor, {
+    message: "Either vendorId or vendor information is required",
+  });
 
 export const UpdateAffiliateLinkSchema = z.object({
   productId: z.string().uuid().optional(),

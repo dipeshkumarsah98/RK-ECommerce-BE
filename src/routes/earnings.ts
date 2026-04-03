@@ -1,5 +1,9 @@
 import { Router } from "express";
-import { authenticate, requireRoles, AuthRequest } from "../middlewares/auth.js";
+import {
+  authenticate,
+  requireRoles,
+  AuthRequest,
+} from "../middlewares/auth.js";
 import { listVendorEarnings } from "../services/earning.service.js";
 
 const router = Router();
@@ -31,13 +35,19 @@ const router = Router();
  *                   items:
  *                     $ref: '#/components/schemas/VendorEarning'
  */
-router.get("/", authenticate, requireRoles("vendor", "admin"), async (req: AuthRequest, res, next) => {
-  try {
-    const earnings = await listVendorEarnings(req.user!.userId);
-    res.json(earnings);
-  } catch (err) {
-    next(err);
-  }
-});
+router.get(
+  "/",
+  authenticate,
+  requireRoles("vendor", "admin"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const earnings = await listVendorEarnings(req.user!.userId);
+      res.status(200).json(earnings);
+    } catch (err) {
+      console.log("Error fetching vendor earnings:", err);
+      next(err);
+    }
+  },
+);
 
 export default router;

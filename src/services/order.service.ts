@@ -13,7 +13,7 @@ import {
   CommissionType,
 } from "./affiliate.service.js";
 import { StockReason } from "../types/stock-movement.type.js";
-import { BadRequestError } from "../lib/errors.js";
+import { BadRequestError, NotFoundError } from "../lib/errors.js";
 import {
   enqueueOrderConfirmation,
   enqueueAdminNewOrder,
@@ -425,7 +425,15 @@ export async function listOrders(filters: {
       take: limit,
       include: {
         items: { include: { product: { select: { id: true, title: true } } } },
-        payment: true,
+        payment: {
+          select: {
+            paymentMethod: true,
+            amount: true,
+            status: true,
+            paidAt: true,
+          },
+        },
+        user: { select: { email: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -436,10 +444,11 @@ export async function listOrders(filters: {
 }
 
 export async function getOrderById(id: string, userId?: string) {
-  const order = await prisma.order.findUnique({
+  let order: any = await prisma.order.findUnique({
     where: { id },
     include: {
       items: { include: { product: true } },
+      user: { select: { email: true, name: true } },
       payment: true,
       verification: true,
       earnings: true,
@@ -447,9 +456,24 @@ export async function getOrderById(id: string, userId?: string) {
     },
   });
 
-  if (!order) throw new BadRequestError("Order not found");
-
-  if (userId && order.userId !== userId) throw new BadRequestError("Forbidden");
+  if (!order) throw new NotFoundError("Order not found");
+  if (order.shippingAddressId && order.billingAddressId) {
+    const addresses = await prisma.address.findMany({
+      where: {
+        OR: [{ id: order.shippingAddressId }, { id: order.billingAddressId }],
+      },
+    });
+    const addressMap = new Map(addresses.map((a) => [a.id, a]));
+    order = {
+      ...order,
+      shippingAddress: order.shippingAddressId
+        ? addressMap.get(order.shippingAddressId)
+        : null,
+      billingAddress: order.billingAddressId
+        ? addressMap.get(order.billingAddressId)
+        : null,
+    };
+  }
 
   return order;
 }
@@ -514,4 +538,40 @@ export async function updateOrderStatus(
   }
 
   return updated;
+}
+
+/**
+ * Get order statistics
+ * Returns total orders, processing orders, gross revenue, and cancellations
+ */
+export async function getOrderStats() {
+  const [totalOrders, processingOrders, cancelledOrders, revenueAggregate] =
+    await Promise.all([
+      prisma.order.count(),
+      prisma.order.count({
+        where: { status: OrderStatus.PROCESSING },
+      }),
+      prisma.order.count({
+        where: { status: OrderStatus.CANCELLED },
+      }),
+      prisma.order.aggregate({
+        _sum: { totalAmount: true },
+        where: {
+          status: {
+            notIn: [
+              OrderStatus.CANCELLED,
+              OrderStatus.PENDING,
+              OrderStatus.AWAITING_VERIFICATION,
+            ],
+          },
+        },
+      }),
+    ]);
+
+  return {
+    totalOrders,
+    processingOrders,
+    grossRevenue: revenueAggregate._sum.totalAmount || 0,
+    cancellations: cancelledOrders,
+  };
 }

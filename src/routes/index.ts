@@ -11,6 +11,7 @@ import affiliatesRouter from "./affiliates.js";
 import earningsRouter from "./earnings.js";
 import adminRouter from "./admin.js";
 import addressesRouter from "./addresses.js";
+import vendorsRouter from "./vendors.js";
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use("/affiliates", affiliatesRouter);
 router.use("/earnings", earningsRouter);
 router.use("/admin", adminRouter);
 router.use("/addresses", addressesRouter);
+router.use("/vendors", vendorsRouter);
 
 export default router;

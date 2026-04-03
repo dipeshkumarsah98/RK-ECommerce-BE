@@ -31,7 +31,9 @@ const router = Router();
  *   post:
  *     tags: [Affiliates]
  *     summary: Create an affiliate link (vendor/admin)
- *     description: Generates a unique shareable code with configurable discount and commission rules.
+ *     description: >
+ *       Generates a unique shareable code with configurable discount and commission rules.
+ *       Either provide vendorId (to link to existing user) OR vendor info (to create/update vendor).
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -40,10 +42,15 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [vendor, affiliate]
+ *             required: [affiliate]
  *             properties:
+ *               vendorId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Optional - use existing user as vendor. Provide either this OR vendor info.
  *               vendor:
  *                 type: object
+ *                 description: Optional - vendor info to create/update. Provide either this OR vendorId.
  *                 required: [name, email, affiliateType]
  *                 properties:
  *                   name:

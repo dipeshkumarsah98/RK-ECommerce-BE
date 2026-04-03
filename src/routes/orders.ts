@@ -16,6 +16,7 @@ import {
   listOrders,
   getOrderById,
   updateOrderStatus,
+  getOrderStats,
 } from "../services/order.service.js";
 import { OrderStatus } from "../lib/prisma.js";
 
@@ -62,6 +63,54 @@ const CreateOrderSchema = z
 const UpdateStatusSchema = z.object({
   status: z.nativeEnum(OrderStatus),
 });
+
+/**
+ * @openapi
+ * /orders/stats:
+ *   get:
+ *     tags: [Orders]
+ *     summary: Get order statistics (admin only)
+ *     description: Returns aggregated statistics including total orders, processing orders, gross revenue, and cancellations.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Order statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 totalOrders:
+ *                   type: integer
+ *                   description: Total number of orders
+ *                 processingOrders:
+ *                   type: integer
+ *                   description: Number of orders in processing status
+ *                 grossRevenue:
+ *                   type: number
+ *                   description: Total revenue excluding cancelled and pending orders
+ *                 cancellations:
+ *                   type: integer
+ *                   description: Number of cancelled orders
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - admin access required
+ */
+router.get(
+  "/stats",
+  authenticate,
+  requireRoles("admin"),
+  async (req, res, next) => {
+    try {
+      const stats = await getOrderStats();
+      res.json(stats);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 /**
  * @openapi
@@ -143,6 +192,14 @@ const UpdateStatusSchema = z.object({
  *               notes:
  *                 type: string
  *                 description: Additional order notes or instructions
+ *               user:
+ *                 type: object
+ *                 properties:
+ *                   email:
+ *                     type: string
+ *                     format: email
+ *                   name:
+ *                     type: string
  *     responses:
  *       201:
  *         description: Order created successfully

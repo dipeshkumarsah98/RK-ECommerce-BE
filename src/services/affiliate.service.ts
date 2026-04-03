@@ -27,47 +27,75 @@ export async function createAffiliateLink(
   input: CreateVendorAffiliateLinkPayload,
 ) {
   return prisma.$transaction(async (tx) => {
-    const { vendor, affiliate } = input;
+    const { vendorId, vendor, affiliate } = input;
 
-    const existing = await tx.user.findUnique({
-      where: { email: vendor.email },
-      select: { roles: true, extras: true },
-    });
+    let finalVendorId: string;
 
-    const productExists = await tx.product.findUnique({
-      where: { id: affiliate.productId },
-    });
-    if (!productExists)
-      throw new BadRequestError(`Selected product does not exist`);
+    // If vendorId is provided, use it directly
+    if (vendorId) {
+      const existingVendor = await tx.user.findUnique({
+        where: { id: vendorId },
+        select: { id: true },
+      });
 
-    const vendorExtras = {
-      ...(existing?.extras as Record<string, any>),
-      affiliateType: vendor.affiliateType,
-      ...(vendor.bankName && { bankName: vendor.bankName }),
-      ...(vendor.accountNumber && { accountNumber: vendor.accountNumber }),
-    };
+      if (!existingVendor) {
+        throw new BadRequestError(`Vendor with ID ${vendorId} does not exist`);
+      }
 
-    const vendorUser = await tx.user.upsert({
-      where: { email: vendor.email },
-      create: {
-        name: vendor.name,
-        email: vendor.email,
-        phone: vendor.contact,
-        extras: vendorExtras,
-      },
-      update: {
-        name: vendor.name,
-        phone: vendor.contact,
-        extras: vendorExtras,
-      },
-    });
+      finalVendorId = vendorId;
+    } else if (vendor) {
+      // Otherwise, upsert vendor using vendor info
+      const existing = await tx.user.findUnique({
+        where: { email: vendor.email },
+        select: { roles: true, extras: true },
+      });
+
+      const vendorExtras = {
+        ...(existing?.extras as Record<string, any>),
+        affiliateType: vendor.affiliateType,
+        ...(vendor.bankName && { bankName: vendor.bankName }),
+        ...(vendor.accountNumber && { accountNumber: vendor.accountNumber }),
+      };
+
+      const vendorUser = await tx.user.upsert({
+        where: { email: vendor.email },
+        create: {
+          name: vendor.name,
+          email: vendor.email,
+          phone: vendor.contact,
+          roles: ["vendor"],
+          extras: vendorExtras,
+        },
+        update: {
+          name: vendor.name,
+          phone: vendor.contact,
+          extras: vendorExtras,
+        },
+      });
+
+      finalVendorId = vendorUser.id;
+    } else {
+      throw new BadRequestError(
+        "Either vendorId or vendor information is required",
+      );
+    }
+
+    // Validate product exists if productId is provided
+    if (affiliate.productId) {
+      const productExists = await tx.product.findUnique({
+        where: { id: affiliate.productId },
+      });
+      if (!productExists) {
+        throw new BadRequestError(`Selected product does not exist`);
+      }
+    }
 
     const code = affiliate.code ?? (await generateAffiliateCode());
 
     const link = await tx.affiliateLink.create({
       data: {
         code,
-        vendorId: vendorUser.id,
+        vendorId: finalVendorId,
         productId: affiliate.productId,
         discountType: affiliate.discountType,
         discountValue: affiliate.discountValue,
@@ -75,7 +103,7 @@ export async function createAffiliateLink(
         commissionValue: affiliate.commissionValue,
       },
       include: {
-        vendor: { select: { id: true, email: true, extras: true } },
+        vendor: { select: { id: true, name: true, email: true, extras: true } },
         product: { select: { id: true, title: true, slug: true } },
       },
     });
