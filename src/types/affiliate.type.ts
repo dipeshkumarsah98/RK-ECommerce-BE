@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AddressInputSchema } from "./order.type";
 
 export enum DiscountType {
   PERCENTAGE = "PERCENTAGE",
@@ -21,8 +22,8 @@ export const VendorInfoSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
   affiliateType: z.nativeEnum(AffiliateVendorType),
+  address: AddressInputSchema,
   contact: z.string().optional(),
-  address: z.string().optional(),
   bankName: z.string().optional(),
   accountNumber: z.string().optional(),
 });
@@ -39,12 +40,24 @@ export const AffiliateLinkInfoSchema = z.object({
 export const CreateVendorAffiliateLinkSchema = z
   .object({
     vendorId: z.string().uuid().optional(),
-    vendor: VendorInfoSchema.optional(),
+    vendor: VendorInfoSchema.partial().optional(),
     affiliate: AffiliateLinkInfoSchema,
   })
-  .refine((data) => data.vendorId || data.vendor, {
-    message: "Either vendorId or vendor information is required",
-  });
+  .refine(
+    (data) => {
+      // If vendorId is provided, vendor can be partial (for overrides)
+      if (data.vendorId) return true;
+      // If vendorId is not provided, vendor must be complete
+      if (data.vendor) {
+        const result = VendorInfoSchema.safeParse(data.vendor);
+        return result.success;
+      }
+      return false;
+    },
+    {
+      message: "Either vendorId or complete vendor information is required",
+    },
+  );
 
 export const UpdateAffiliateLinkSchema = z.object({
   productId: z.string().uuid().optional(),

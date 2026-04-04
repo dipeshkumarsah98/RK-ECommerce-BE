@@ -38,9 +38,13 @@ const UpdateUserSchema = z.object({
  *       - in: query
  *         name: role
  *         schema:
- *           type: string
- *           enum: [admin, vendor, customer]
- *         description: Filter users by role
+ *           type: array
+ *           items:
+ *             type: string
+ *             enum: [admin, vendor, customer]
+ *         style: form
+ *         explode: true
+ *         description: Filter users by one or more roles (can pass multiple role query params)
  *       - in: query
  *         name: page
  *         schema:
@@ -53,6 +57,26 @@ const UpdateUserSchema = z.object({
  *           type: integer
  *           default: 10
  *         description: Items per page
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [roles, updatedAt, createdAt, name]
+ *           default: updatedAt
+ *         description: Field to sort by
+ *       - in: query
+ *         name: extras
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include extra user information
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Sort order (ascending or descending)
  *     responses:
  *       200:
  *         description: List of users with addresses
@@ -73,8 +97,10 @@ const UpdateUserSchema = z.object({
  *                   type: integer
  *                 search:
  *                   type: string
- *                 role:
- *                   type: string
+ *                 roles:
+ *                   type: array
+ *                   items:
+ *                     type: string
  *       401:
  *         description: Unauthenticated
  *       403:
@@ -83,11 +109,30 @@ const UpdateUserSchema = z.object({
 router.get("/", authenticate, requireRoles("admin"), async (req, res, next) => {
   try {
     const search = req.query.search as string | undefined;
-    const role = req.query.role as string | undefined;
+    const roleParam = req.query.role;
+    let roles: string[] | undefined;
+    if (roleParam) {
+      roles = Array.isArray(roleParam)
+        ? (roleParam as string[])
+        : [roleParam as string];
+    }
     const page = Number(req.query.page) || 1;
     const perPage = Number(req.query.perPage) || 10;
+    const sortBy =
+      (req.query.sortBy as "roles" | "updatedAt" | "createdAt" | "name") ||
+      "updatedAt";
+    const sortOrder = (req.query.sortOrder as "asc" | "desc") || "desc";
+    const extras = req.query.extras === "true";
 
-    const result = await searchUsers(search, role, page, perPage);
+    const result = await searchUsers(
+      search,
+      roles,
+      page,
+      perPage,
+      sortBy,
+      sortOrder,
+      extras,
+    );
     res.json(result);
   } catch (err) {
     console.log("Error searching users:", err);

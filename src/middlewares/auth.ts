@@ -9,7 +9,7 @@ export interface AuthRequest extends Request {
 export function authenticate(
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -31,6 +31,7 @@ export function requireRoles(...roles: string[]) {
       next(new UnauthorizedError());
       return;
     }
+    console.log("User roles:", req.user.roles);
     const hasRole = roles.some((r) => req.user!.roles.includes(r));
     if (!hasRole) {
       next(new ForbiddenError("Insufficient permissions"));

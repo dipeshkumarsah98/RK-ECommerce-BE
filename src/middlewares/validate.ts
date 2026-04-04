@@ -10,7 +10,20 @@ export function validate(schema: ZodSchema, part: RequestPart = "body") {
       next(result.error);
       return;
     }
-    req[part] = result.data;
+
+    // For body, we can directly assign. For query/params, we need to use defineProperty
+    if (part === "body") {
+      req[part] = result.data;
+    } else {
+      // Override the getter for query/params with the validated data
+      Object.defineProperty(req, part, {
+        value: result.data,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+
     next();
   };
 }

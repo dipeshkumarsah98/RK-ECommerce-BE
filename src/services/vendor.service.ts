@@ -28,7 +28,11 @@ export async function getVendorOrders(
   const skip = (page - 1) * limit;
 
   // Build where clause
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = {
+    status: {
+      not: OrderStatus.AWAITING_VERIFICATION,
+    },
+  };
 
   // Filter by affiliate code if provided
   if (affiliateCode) {
@@ -201,7 +205,10 @@ export async function getVendorOrderStats(
     };
   }
 
-  const where = { affiliateId: { in: affiliateLinkIds } };
+  const where = {
+    status: { not: OrderStatus.AWAITING_VERIFICATION },
+    affiliateId: { in: affiliateLinkIds },
+  };
 
   // Fetch all orders for the vendor
   const [totalOrders, orders, earnings] = await Promise.all([
@@ -245,7 +252,14 @@ export async function getVendorOrderStats(
 
   // Get top affiliate links by performance
   const affiliateLinkStats = await prisma.affiliateLink.findMany({
-    where: { id: { in: affiliateLinkIds } },
+    where: {
+      id: { in: affiliateLinkIds },
+      orders: {
+        some: {
+          status: { not: OrderStatus.AWAITING_VERIFICATION },
+        },
+      },
+    },
     select: {
       id: true,
       code: true,

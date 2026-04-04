@@ -24,6 +24,8 @@ import type {
   OrderItemInput,
 } from "../types/order.type.js";
 import type { PrismaTransactionClient } from "../types/prisma.type.js";
+import { logger } from "../lib/logger.js";
+import { SHIPPING_CHARGE, TAX_RATE } from "../lib/constant.js";
 
 export type { CreateOrderInput } from "../types/order.type.js";
 
@@ -203,9 +205,6 @@ function calculateOrderTotals(
     };
   });
 
-  const taxAmount = 0; // TODO: Implement tax calculation
-  const shippingAmount = 0; // TODO: Implement shipping calculation
-
   let discountAmount = 0;
   if (affiliateLink) {
     discountAmount = computeDiscount(
@@ -215,7 +214,11 @@ function calculateOrderTotals(
     );
   }
 
-  const totalAmount = subtotal + taxAmount + shippingAmount - discountAmount;
+  const costAfterDiscount = subtotal - discountAmount;
+  const taxAmount = costAfterDiscount * TAX_RATE;
+  const shippingAmount = SHIPPING_CHARGE;
+
+  const totalAmount = costAfterDiscount + taxAmount + shippingAmount;
 
   return {
     orderItems,
@@ -245,7 +248,8 @@ async function createOrderRecord(
       ? OrderStatus.AWAITING_VERIFICATION
       : OrderStatus.PENDING;
 
-  const orderNumber = `ORD-${nanoid(12)}`;
+  const currentYear = new Date().getFullYear();
+  const orderNumber = `ORD-${currentYear}-${nanoid(4)}`;
 
   return tx.order.create({
     data: {
@@ -450,9 +454,30 @@ export async function getOrderById(id: string, userId?: string) {
       items: { include: { product: true } },
       user: { select: { email: true, name: true } },
       payment: true,
-      verification: true,
-      earnings: true,
-      affiliate: true,
+      verification: {
+        include: {
+          admin: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+      affiliate: {
+        select: {
+          vendor: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+          code: true,
+          discountType: true,
+          discountValue: true,
+        },
+      },
     },
   });
 
@@ -482,60 +507,77 @@ export async function updateOrderStatus(
   orderId: string,
   newStatus: OrderStatus,
 ) {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { items: true },
-  });
-  if (!order) throw new Error("Order not found");
-
-  const restoreStatuses: OrderStatus[] = [OrderStatus.CANCELLED];
-  const previousStatus = order.status;
-
-  const updated = await prisma.order.update({
-    where: { id: orderId },
-    data: { status: newStatus },
-  });
-
-  if (
-    restoreStatuses.includes(newStatus) &&
-    !restoreStatuses.includes(previousStatus)
-  ) {
-    for (const item of order.items) {
-      await createStockMovement({
-        productId: item.productId,
-        type: StockMovementType.IN,
-        quantity: item.quantity,
-        reason: StockReason.ORDER_CANCELLED,
-        orderId: order.id,
-      });
-    }
-  }
-
-  if (newStatus === OrderStatus.COMPLETED && order.affiliateId) {
-    const affiliateLink = await prisma.affiliateLink.findUnique({
-      where: { id: order.affiliateId },
+  const updated = await prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
     });
-    if (affiliateLink) {
-      const commission = computeCommission(
-        order.totalAmount,
-        affiliateLink.commissionType as CommissionType,
-        affiliateLink.commissionValue,
-      );
-      const existingEarning = await prisma.vendorEarning.findFirst({
-        where: { orderId: order.id },
-      });
-      if (!existingEarning) {
-        await prisma.vendorEarning.create({
-          data: {
-            vendorId: affiliateLink.vendorId,
+    if (!order) throw new NotFoundError("Order not found");
+
+    const restoreStatuses: OrderStatus[] = [OrderStatus.CANCELLED];
+    const previousStatus = order.status;
+
+    const updated = await tx.order.update({
+      where: { id: orderId },
+      data: { status: newStatus },
+    });
+
+    if (
+      restoreStatuses.includes(newStatus) &&
+      !restoreStatuses.includes(previousStatus)
+    ) {
+      for (const item of order.items) {
+        await createStockMovement(
+          {
+            productId: item.productId,
+            type: StockMovementType.IN,
+            quantity: item.quantity,
+            reason: StockReason.ORDER_CANCELLED,
             orderId: order.id,
-            affiliateId: affiliateLink.id,
-            commission,
           },
+          tx,
+        );
+      }
+    }
+
+    if (newStatus === OrderStatus.COMPLETED && order.affiliateId) {
+      const affiliateLink = await tx.affiliateLink.findUnique({
+        where: { id: order.affiliateId },
+      });
+      if (affiliateLink) {
+        const commission = computeCommission(
+          order.totalAmount,
+          affiliateLink.commissionType as CommissionType,
+          affiliateLink.commissionValue,
+        );
+        const existingEarning = await tx.vendorEarning.findFirst({
+          where: { orderId: order.id },
+        });
+        if (!existingEarning) {
+          logger.info(
+            `Recording affiliate commission for order ${order.id}, affiliate ${affiliateLink.code}, amount ${commission}`,
+          );
+          await tx.vendorEarning.create({
+            data: {
+              vendorId: affiliateLink.vendorId,
+              orderId: order.id,
+              affiliateId: affiliateLink.id,
+              commission,
+            },
+          });
+        }
+      }
+      // mark payment as completed
+      if (order.paymentMethod === "COD") {
+        await tx.payment.update({
+          where: { orderId: order.id },
+          data: { status: PaymentStatus.SUCCESS, paidAt: new Date() },
         });
       }
     }
-  }
+
+    return updated;
+  });
 
   return updated;
 }

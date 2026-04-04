@@ -35,7 +35,7 @@ export async function createAffiliateLink(
     if (vendorId) {
       const existingVendor = await tx.user.findUnique({
         where: { id: vendorId },
-        select: { id: true },
+        select: { id: true, roles: true, extras: true },
       });
 
       if (!existingVendor) {
@@ -43,6 +43,26 @@ export async function createAffiliateLink(
       }
 
       finalVendorId = vendorId;
+      const vendorExtras = {
+        ...(existingVendor.extras as Record<string, any>),
+        ...(vendor?.bankName && { bankName: vendor.bankName }),
+        ...(vendor?.accountNumber && { accountNumber: vendor.accountNumber }),
+        affiliateType: vendor?.affiliateType,
+      };
+
+      if (vendor) {
+        await tx.user.update({
+          where: { id: vendorId },
+          data: {
+            ...(existingVendor.roles?.includes("vendor") && {
+              roles: {
+                push: "vendor",
+              },
+            }),
+            extras: vendorExtras,
+          },
+        });
+      }
     } else if (vendor) {
       // Otherwise, upsert vendor using vendor info
       const existing = await tx.user.findUnique({
@@ -52,19 +72,31 @@ export async function createAffiliateLink(
 
       const vendorExtras = {
         ...(existing?.extras as Record<string, any>),
-        affiliateType: vendor.affiliateType,
         ...(vendor.bankName && { bankName: vendor.bankName }),
         ...(vendor.accountNumber && { accountNumber: vendor.accountNumber }),
+        affiliateType: vendor.affiliateType,
       };
 
       const vendorUser = await tx.user.upsert({
         where: { email: vendor.email },
         create: {
-          name: vendor.name,
-          email: vendor.email,
+          name: vendor.name!,
+          email: vendor.email!,
           phone: vendor.contact,
           roles: ["vendor"],
           extras: vendorExtras,
+          ...(vendor.address && {
+            addresses: {
+              create: {
+                addressType: "billing",
+                street_address: vendor.address.street_address,
+                city: vendor.address.city,
+                state: vendor.address.state,
+                postal_code: vendor.address.postal_code,
+                isDefault: true,
+              },
+            },
+          }),
         },
         update: {
           name: vendor.name,
@@ -237,7 +269,7 @@ export async function getAffiliateLinkByCode(code: string) {
       discountType: true,
       discountValue: true,
       product: { select: { id: true, title: true } },
-      vendor: { select: { id: true, email: true } },
+      vendor: { select: { id: true, email: true, name: true } },
     },
   });
   if (!link) throw new Error("Affiliate link not found");
@@ -249,7 +281,16 @@ export async function getAffiliateLinkById(id: string) {
     where: { id },
     include: {
       product: { select: { id: true, title: true, slug: true, price: true } },
-      vendor: { select: { id: true, email: true, extras: true } },
+      vendor: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          extras: true,
+          addresses: true,
+        },
+      },
     },
   });
   if (!link) throw new NotFoundError("Affiliate link not found");

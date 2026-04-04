@@ -477,6 +477,8 @@ router.patch(
  *                     id:
  *                       type: string
  *                       format: uuid
+ *                     name:
+ *                       type: string
  *                     email:
  *                       type: string
  *                       format: email

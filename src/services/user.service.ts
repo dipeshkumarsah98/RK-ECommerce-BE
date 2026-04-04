@@ -18,9 +18,12 @@ export async function getUserById(id: string) {
 
 export async function searchUsers(
   search?: string,
-  role?: string,
+  roles?: string[],
   page = 1,
   perPage = 10,
+  sortBy: "roles" | "updatedAt" | "createdAt" | "name" = "updatedAt",
+  sortOrder: "asc" | "desc" = "desc",
+  extras: boolean = false,
 ) {
   const skip = (page - 1) * perPage;
 
@@ -34,13 +37,14 @@ export async function searchUsers(
       }
     : {};
 
-  const roleConditions = role
-    ? {
-        roles: {
-          has: role,
-        },
-      }
-    : {};
+  const roleConditions =
+    roles && roles.length > 0
+      ? {
+          roles: {
+            hasSome: roles,
+          },
+        }
+      : {};
 
   const whereClause = {
     ...searchConditions,
@@ -52,7 +56,7 @@ export async function searchUsers(
       where: whereClause,
       skip,
       take: perPage,
-      orderBy: { createdAt: "desc" },
+      orderBy: { [sortBy]: sortOrder },
       select: {
         id: true,
         email: true,
@@ -60,6 +64,7 @@ export async function searchUsers(
         phone: true,
         roles: true,
         createdAt: true,
+        extras: extras,
         addresses: {
           select: {
             id: true,
@@ -78,7 +83,7 @@ export async function searchUsers(
     }),
   ]);
 
-  return { items, total, page, perPage, search, role };
+  return { items, total, page, perPage, search, roles };
 }
 
 export async function getUserAddresses(userId: string) {
