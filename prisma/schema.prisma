@@ -49,12 +49,14 @@ model User {
 
   extras Json?
 
-  orders         Order[]
-  affiliates     AffiliateLink[]
-  earnings       VendorEarning[]
-  verifications  CODVerification[] @relation("AdminVerification")
-  stockMovements StockMovement[]
-  addresses      Address[]
+  orders               Order[]
+  affiliates           AffiliateLink[]
+  earnings             VendorEarning[]
+  verifications        CODVerification[]   @relation("AdminVerification")
+  stockMovements       StockMovement[]
+  addresses            Address[]
+  withdrawalRequests   WithdrawalRequest[]
+  processedWithdrawals WithdrawalRequest[] @relation("AdminWithdrawal")
 
   @@index([email])
   @@map("tbl_users")
@@ -287,4 +289,29 @@ model VendorEarning {
   @@index([orderId])
   @@index([affiliateId])
   @@map("tbl_vendor_earnings")
+}
+
+model WithdrawalRequest {
+  id String @id @default(uuid())
+
+  vendorId String
+  vendor   User   @relation(fields: [vendorId], references: [id])
+
+  amount   Float
+  currency String @default("NPR")
+
+  status String // 'PENDING', 'APPROVED', 'REJECTED'
+
+  remarks          String?
+  transactionProof String? // URL or reference to the transaction proof
+  requestedAt      DateTime  @default(now())
+  processedAt      DateTime?
+  rejectionReason  String?
+
+  processedBy String?
+  admin       User?   @relation("AdminWithdrawal", fields: [processedBy], references: [id])
+
+  @@index([vendorId])
+  @@index([status])
+  @@map("tbl_withdrawal_requests")
 }

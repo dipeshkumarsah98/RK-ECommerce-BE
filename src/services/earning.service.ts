@@ -5,7 +5,15 @@ export async function listVendorEarnings(vendorId: string) {
     where: { vendorId },
     include: {
       order: {
-        select: { id: true, totalAmount: true, status: true, createdAt: true },
+        select: {
+          id: true,
+          totalAmount: true,
+          status: true,
+          createdAt: true,
+          items: {
+            select: { product: { select: { title: true, images: true } } },
+          },
+        },
       },
       affiliate: { select: { id: true, code: true } },
     },

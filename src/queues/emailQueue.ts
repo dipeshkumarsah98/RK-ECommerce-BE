@@ -20,7 +20,30 @@ export interface AdminNewOrderJobData {
   customerEmail?: string;
 }
 
-export type EmailJobData = OrderConfirmationJobData | AdminNewOrderJobData;
+export interface WithdrawalRequestedJobData {
+  type: "WITHDRAWAL_REQUESTED";
+  vendorName: string;
+  vendorEmail: string;
+  amount: number;
+  withdrawalId: string;
+}
+
+export interface WithdrawalProcessedJobData {
+  type: "WITHDRAWAL_PROCESSED";
+  to: string;
+  vendorName: string;
+  amount: number;
+  status: "APPROVED" | "REJECTED";
+  transactionProof?: string;
+  rejectionReason?: string;
+  remarks?: string;
+}
+
+export type EmailJobData =
+  | OrderConfirmationJobData
+  | AdminNewOrderJobData
+  | WithdrawalRequestedJobData
+  | WithdrawalProcessedJobData;
 
 export const emailQueue = new Queue<EmailJobData>(EMAIL_QUEUE_NAME, {
   connection: redisConnection,
@@ -32,10 +55,38 @@ export const emailQueue = new Queue<EmailJobData>(EMAIL_QUEUE_NAME, {
   },
 });
 
-export async function enqueueOrderConfirmation(data: Omit<OrderConfirmationJobData, "type">) {
-  return emailQueue.add("order-confirmation", { type: "ORDER_CONFIRMATION", ...data });
+export async function enqueueOrderConfirmation(
+  data: Omit<OrderConfirmationJobData, "type">,
+) {
+  return emailQueue.add("order-confirmation", {
+    type: "ORDER_CONFIRMATION",
+    ...data,
+  });
 }
 
-export async function enqueueAdminNewOrder(data: Omit<AdminNewOrderJobData, "type">) {
-  return emailQueue.add("admin-new-order", { type: "ADMIN_NEW_ORDER", ...data });
+export async function enqueueAdminNewOrder(
+  data: Omit<AdminNewOrderJobData, "type">,
+) {
+  return emailQueue.add("admin-new-order", {
+    type: "ADMIN_NEW_ORDER",
+    ...data,
+  });
+}
+
+export async function enqueueWithdrawalRequested(
+  data: Omit<WithdrawalRequestedJobData, "type">,
+) {
+  return emailQueue.add("withdrawal-requested", {
+    type: "WITHDRAWAL_REQUESTED",
+    ...data,
+  });
+}
+
+export async function enqueueWithdrawalProcessed(
+  data: Omit<WithdrawalProcessedJobData, "type">,
+) {
+  return emailQueue.add("withdrawal-processed", {
+    type: "WITHDRAWAL_PROCESSED",
+    ...data,
+  });
 }
