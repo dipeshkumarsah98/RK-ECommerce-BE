@@ -25,7 +25,7 @@ export type CreateWithdrawalRequest = z.infer<
  * Approve withdrawal input schema
  */
 export const ApproveWithdrawalSchema = z.object({
-  transactionProof: z.string().url("Must be a valid URL"),
+  transactionProof: z.string(),
   remarks: z.string().optional(),
 });
 

@@ -28,6 +28,13 @@ async function main() {
       ],
       totalStock: 50,
       status: "active",
+      movements: {
+        create: {
+          quantity: 50,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -46,6 +53,13 @@ async function main() {
       ],
       totalStock: 75,
       status: "active",
+      movements: {
+        create: {
+          quantity: 75,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -61,6 +75,13 @@ async function main() {
       images: ["https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5"],
       totalStock: 100,
       status: "active",
+      movements: {
+        create: {
+          quantity: 100,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -79,6 +100,13 @@ async function main() {
       ],
       totalStock: 30,
       status: "active",
+      movements: {
+        create: {
+          quantity: 30,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -94,6 +122,13 @@ async function main() {
       images: ["https://images.unsplash.com/photo-1527864550417-7fd91fc51a46"],
       totalStock: 45,
       status: "active",
+      movements: {
+        create: {
+          quantity: 45,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -109,6 +144,13 @@ async function main() {
       images: ["https://images.unsplash.com/photo-1583863788434-e58a36330cf0"],
       totalStock: 150,
       status: "active",
+      movements: {
+        create: {
+          quantity: 150,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -124,6 +166,13 @@ async function main() {
       images: ["https://images.unsplash.com/photo-1593642532400-2682810df593"],
       totalStock: 25,
       status: "active",
+      movements: {
+        create: {
+          quantity: 25,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -139,6 +188,13 @@ async function main() {
       images: ["https://images.unsplash.com/photo-1625948515291-69613efd103f"],
       totalStock: 60,
       status: "active",
+      movements: {
+        create: {
+          quantity: 60,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -157,6 +213,13 @@ async function main() {
       ],
       totalStock: 40,
       status: "active",
+      movements: {
+        create: {
+          quantity: 40,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -172,6 +235,13 @@ async function main() {
       images: ["https://images.unsplash.com/photo-1531492746076-161ca9bcad58"],
       totalStock: 35,
       status: "active",
+      movements: {
+        create: {
+          quantity: 35,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -188,6 +258,13 @@ async function main() {
       images: ["https://images.unsplash.com/photo-1599669454699-248893623440"],
       totalStock: 0,
       status: "out_of_stock",
+      movements: {
+        create: {
+          quantity: 0,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 
@@ -203,6 +280,13 @@ async function main() {
       images: ["https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7"],
       totalStock: 5,
       status: "inactive",
+      movements: {
+        create: {
+          quantity: 5,
+          type: "IN",
+          reason: "RESTOCK",
+        },
+      },
     },
   });
 

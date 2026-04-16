@@ -455,9 +455,6 @@ export async function getVendorCommissionHistory(
   const { page, limit, sortBy, sortOrder, isActive, startDate, endDate } =
     query;
 
-  console.log("Fetching commission history with query:", query);
-
-  // Build where clause
   const where: Record<string, unknown> = { vendorId };
 
   // Filter by active status if provided

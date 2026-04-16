@@ -544,7 +544,6 @@ router.get(
   validate(VendorCommissionQuerySchema, "query"),
   async (req: AuthRequest, res, next) => {
     try {
-      console.log("Received commission history query:", req.query);
       const result = await getVendorCommissionHistory(req.user!.userId, {
         page: req.query.page ? Number(req.query.page) : 1,
         limit: req.query.limit ? Number(req.query.limit) : 20,
