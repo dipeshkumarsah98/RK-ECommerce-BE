@@ -359,6 +359,54 @@ function sendOrderNotifications(
 }
 
 /**
+ * Verify order input and calculate totals without creating the order
+ * Returns price breakdown, product details, and validates stock availability
+ */
+export async function verifyOrder(input: CreateOrderInput) {
+  return prisma.$transaction(async (tx) => {
+    // Validate products and stock
+    const productMap = await validateProductsAndStock(input.items, tx);
+
+    // Validate affiliate code if provided
+    const affiliateLink = await validateAffiliateCode(input.affiliateCode, tx);
+
+    // Calculate all totals
+    const totals = calculateOrderTotals(input.items, productMap, affiliateLink);
+
+    // Build detailed response
+    const items = input.items.map((item) => {
+      const product = productMap.get(item.productId)!;
+      return {
+        productId: product.id,
+        productTitle: product.title,
+        quantity: item.quantity,
+        unitPrice: product.price,
+        totalPrice: product.price * item.quantity,
+        availableStock: product.totalStock,
+      };
+    });
+
+    return {
+      items,
+      subtotal: totals.subtotal,
+      discountAmount: totals.discountAmount,
+      taxAmount: totals.taxAmount,
+      shippingAmount: totals.shippingAmount,
+      totalAmount: totals.totalAmount,
+      currency: "NPR",
+      affiliateCode: affiliateLink?.code || null,
+      affiliateDiscount: affiliateLink
+        ? {
+            type: affiliateLink.discountType,
+            value: affiliateLink.discountValue,
+            amount: totals.discountAmount,
+          }
+        : null,
+    };
+  });
+}
+
+/**
  * Create a new order with automatic user lookup/creation
  * Supports guest orders, returning customers, and admin orders on behalf of others
  */

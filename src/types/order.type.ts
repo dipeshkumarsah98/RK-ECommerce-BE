@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { OrderStatus } from "../lib/prisma";
 
 export const AddressInputSchema = z.object({
   street_address: z.string().optional(),
@@ -34,7 +35,34 @@ export const CreateOrderInputSchema = z.object({
   items: z.array(OrderItemInputSchema).min(1),
   notes: z.string().optional(),
 });
+export const UpdateStatusSchema = z.object({
+  status: z.nativeEnum(OrderStatus),
+});
 
 export type AddressInput = z.infer<typeof AddressInputSchema>;
 export type OrderItemInput = z.infer<typeof OrderItemInputSchema>;
 export type CreateOrderInput = z.infer<typeof CreateOrderInputSchema>;
+export type UpdateStatusInput = z.infer<typeof UpdateStatusSchema>;
+
+export type OrderVerificationResponse = {
+  items: Array<{
+    productId: string;
+    productTitle: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+    availableStock: number;
+  }>;
+  subtotal: number;
+  discountAmount: number;
+  taxAmount: number;
+  shippingAmount: number;
+  totalAmount: number;
+  currency: string;
+  affiliateCode: string | null;
+  affiliateDiscount: {
+    type: string;
+    value: number;
+    amount: number;
+  } | null;
+};

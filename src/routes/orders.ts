@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { z } from "zod";
 import {
   authenticate,
   requireRoles,
@@ -17,52 +16,15 @@ import {
   getOrderById,
   updateOrderStatus,
   getOrderStats,
+  verifyOrder,
 } from "../services/order.service.js";
 import { OrderStatus } from "../lib/prisma.js";
+import {
+  CreateOrderInputSchema,
+  UpdateStatusSchema,
+} from "../types/order.type.js";
 
 const router = Router();
-
-const OrderItemSchema = z.object({
-  productId: z.string().uuid(),
-  quantity: z.number().int().positive(),
-});
-
-const AddressSchema = z.object({
-  street_address: z.string().optional(),
-  city: z.string(),
-  state: z.string().optional(),
-  postal_code: z.string().optional(),
-});
-
-const CreateOrderSchema = z
-  .object({
-    // Customer info (for guest or finding existing user)
-    customerEmail: z.string().email(),
-    customerName: z.string(),
-    customerPhone: z.string().optional(),
-
-    // Override userId (admin creating on behalf of someone)
-    userId: z.string().uuid().optional(),
-
-    // Addresses (either provide IDs or full address objects)
-    shippingAddressId: z.string().uuid().optional(),
-    shippingAddress: AddressSchema.optional(),
-    billingAddressId: z.string().uuid().optional(),
-    billingAddress: AddressSchema.optional(),
-
-    // Order details
-    affiliateCode: z.string().optional(),
-    paymentMethod: z.enum(["ESEWA", "KHALTI", "COD"]),
-    items: z.array(OrderItemSchema).min(1),
-    notes: z.string().optional(),
-  })
-  .refine((data) => data.shippingAddressId || data.shippingAddress, {
-    message: "Either shippingAddressId or shippingAddress is required",
-  });
-
-const UpdateStatusSchema = z.object({
-  status: z.nativeEnum(OrderStatus),
-});
 
 /**
  * @openapi
@@ -108,6 +70,127 @@ router.get(
       res.json(stats);
     } catch (err) {
       next(err);
+    }
+  },
+);
+
+/**
+ * @openapi
+ * /orders/verify:
+ *   post:
+ *     tags: [Orders]
+ *     summary: Verify order and get price breakdown
+ *     description: >
+ *       Validates order input and returns a detailed price breakdown without creating the order.
+ *       Checks product availability, validates affiliate code, and calculates all costs
+ *       (subtotal, discount, tax, shipping, total). Use this to show order summary before checkout.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [customerEmail, customerName, paymentMethod, items]
+ *             properties:
+ *               customerEmail:
+ *                 type: string
+ *                 format: email
+ *               customerName:
+ *                 type: string
+ *               customerPhone:
+ *                 type: string
+ *               affiliateCode:
+ *                 type: string
+ *                 description: Optional affiliate code for discount calculation
+ *               paymentMethod:
+ *                 type: string
+ *                 enum: [ESEWA, KHALTI, COD]
+ *               items:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [productId, quantity]
+ *                   properties:
+ *                     productId:
+ *                       type: string
+ *                       format: uuid
+ *                     quantity:
+ *                       type: integer
+ *                       minimum: 1
+ *     responses:
+ *       200:
+ *         description: Order verification successful with price breakdown
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       productId:
+ *                         type: string
+ *                       productTitle:
+ *                         type: string
+ *                       quantity:
+ *                         type: integer
+ *                       unitPrice:
+ *                         type: number
+ *                       totalPrice:
+ *                         type: number
+ *                       availableStock:
+ *                         type: integer
+ *                 subtotal:
+ *                   type: number
+ *                   description: Total before discounts, tax, and shipping
+ *                 discountAmount:
+ *                   type: number
+ *                   description: Discount applied from affiliate code
+ *                 taxAmount:
+ *                   type: number
+ *                   description: Tax calculated on discounted amount
+ *                 shippingAmount:
+ *                   type: number
+ *                   description: Flat shipping charge
+ *                 totalAmount:
+ *                   type: number
+ *                   description: Final total amount to pay
+ *                 currency:
+ *                   type: string
+ *                   example: NPR
+ *                 affiliateCode:
+ *                   type: string
+ *                   nullable: true
+ *                 affiliateDiscount:
+ *                   type: object
+ *                   nullable: true
+ *                   properties:
+ *                     type:
+ *                       type: string
+ *                       enum: [PERCENTAGE, FIXED]
+ *                     value:
+ *                       type: number
+ *                     amount:
+ *                       type: number
+ *       400:
+ *         description: Validation error, product not found, or insufficient stock
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post(
+  "/verify",
+  validate(CreateOrderInputSchema),
+  async (req, res, next) => {
+    try {
+      const verification = await verifyOrder(req.body);
+      res.json(verification);
+    } catch (err: unknown) {
+      if (err instanceof Error) next(new BadRequestError(err.message));
+      else next(err);
     }
   },
 );
@@ -216,7 +299,7 @@ router.get(
  */
 router.post(
   "/",
-  validate(CreateOrderSchema),
+  validate(CreateOrderInputSchema),
   async (req: AuthRequest, res, next) => {
     try {
       const order = await createOrder({
