@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-04-03
-**Commit:** cf6e1dd
+**Generated:** 2026-04-24
+**Commit:** 026c743
 **Branch:** main
 
 ## OVERVIEW
@@ -56,7 +56,7 @@ generated/prisma/         # Prisma client output (non-default location)
 - **Modules**: ES modules (`"module": "esnext"`). Use `.js` extensions in imports.
 - **Response shape**: `{ success: false, error: "..." }` for errors. `{ success: false, error: "Validation failed", details: ... }` for Zod errors.
 - **Pagination**: `{ items, total, page, limit }` pattern.
-- **OTP dev shortcut**: In development, OTP is hardcoded `"123456"` (see `src/lib/constant.ts`).
+- **OTP dev shortcut**: In development, OTP is hardcoded `"123456"` (see `src/services/auth.service.ts:20`).
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
@@ -70,34 +70,38 @@ generated/prisma/         # Prisma client output (non-default location)
 
 ```bash
 pnpm run dev              # Start dev server (tsx watch, hot reload)
+                          # NOTE: predev hook runs prisma:generate && build first
 pnpm run build            # Bundle for production (esbuild -> /dist)
 pnpm run start            # Run production build
 pnpm run typecheck        # TypeScript type check (no emit)
 
 pnpm run prisma:generate  # Regenerate client after schema changes
-pnpm run prisma:migrate   # Create + run migration
+pnpm run prisma:migrate   # Create + run migration (alias: migrate:dev)
 pnpm run prisma:push      # Push schema without migration (dev only)
 pnpm run prisma:seed      # Seed DB with test accounts
-pnpm run prisma:reset     # Drop + recreate DB (DESTRUCTIVE)
+pnpm run prisma:reset     # Drop + recreate DB (DESTRUCTIVE, alias: migrate:reset)
+pnpm run prisma:deploy    # Deploy migrations (production, alias: migrate:deploy)
 ```
 
 No lint/format scripts. Prettier installed but run manually.
 
 ## NOTES
 
-- **Express 5** — not Express 4. Error handling uses `next(err)` pattern.
-- **Prisma 7 with pg adapter** — uses `@prisma/adapter-pg` and `prisma.config.ts` for custom config.
+- **Express 5** — not Express 4. Error handling uses `next(err)` pattern. Import `express-async-errors` for async route handlers.
+- **Prisma 7 with pg adapter** — uses `@prisma/adapter-pg` and `prisma.config.ts` for custom config instead of default Prisma setup.
 - **No tests** — no test framework, no test files, no test scripts.
-- **No CI/CD** — no GitHub Actions workflows. Build/deploy is manual.
+- **No CI/CD** — no GitHub Actions workflows (`.github/workflows/` doesn't exist). Build/deploy is manual.
 - **CORS whitelist**: localhost:3000, :5173, :5000 only.
-- **JWT secret env var**: `SESSION_SECRET` (not `JWT_SECRET` despite docs). Fallback: `"fallback-secret"`.
-- **esbuild bundles** to `dist/` with ESM output (.mjs). Copies Prisma binaries to dist.
+- **JWT secret env var**: Code uses `SESSION_SECRET` (see `src/lib/jwt.ts:3`), but `.env.example` shows `JWT_SECRET_KEY`. Use `SESSION_SECRET` in your `.env`. Fallback: `"fallback-secret"`.
+- **esbuild bundles** to `dist/` with ESM output (.mjs). `build.mjs` copies Prisma client from `src/generated/prisma` to `dist/generated/prisma`.
 - **Seeded accounts**: admin/vendor/customer/super @mailinator.com.
-- **`notFoundHandler` middleware exists** but is not mounted in `app.ts`.
+- **`notFoundHandler.middleware.ts` exists** in `src/middlewares/` but is NOT mounted in `app.ts`.
 - **`mailer.config.ts`** exists in `src/config/` but emailWorker creates its own transporter inline.
 
-## CHILD AGENTS
+## RELATED DOCS
 
 - [`src/routes/AGENTS.md`](src/routes/AGENTS.md) — Route handler patterns
 - [`src/services/AGENTS.md`](src/services/AGENTS.md) — Service layer patterns
 - [`src/lib/AGENTS.md`](src/lib/AGENTS.md) — Utility library guide
+- [`.github/copilot-instructions.md`](.github/copilot-instructions.md) — Additional project conventions and patterns
+- [`.agents/skills/`](.agents/skills/) — OpenCode skills (coder, nodejs-express-server, typescript-advanced-types)

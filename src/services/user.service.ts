@@ -1,4 +1,212 @@
 import { prisma } from "../lib/prisma.js";
+import type { CreateUserInput, UpdateUserInput } from "../types/user.type.js";
+import { ConflictError, NotFoundError } from "../lib/errors.js";
+
+export async function createUser(input: CreateUserInput) {
+  // Check if email already exists
+  const existingUser = await prisma.user.findUnique({
+    where: { email: input.email },
+  });
+
+  if (existingUser) {
+    throw new ConflictError(
+      `User with this email ${input.email} already exists`,
+    );
+  }
+
+  // Create the user with addresses
+  const user = await prisma.user.create({
+    data: {
+      name: input.name,
+      email: input.email,
+      phone: input.phone,
+      roles: input.roles,
+      isActive: input.isActive ?? true,
+      extras: input.extras,
+      ...(input.addresses && input.addresses.length > 0
+        ? {
+            addresses: {
+              create: input.addresses.map((addr) => ({
+                addressType: addr.addressType,
+                street_address: addr.street_address,
+                city: addr.city,
+                state: addr.state,
+                postal_code: addr.postal_code,
+                isDefault: addr.isDefault ?? false,
+              })),
+            },
+          }
+        : {}),
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      phone: true,
+      roles: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      extras: true,
+      addresses: {
+        select: {
+          id: true,
+          addressType: true,
+          street_address: true,
+          city: true,
+          state: true,
+          postal_code: true,
+          isDefault: true,
+        },
+      },
+    },
+  });
+
+  return user;
+}
+
+export async function updateUserById(id: string, input: UpdateUserInput) {
+  // Check if user exists
+  const existingUser = await prisma.user.findUnique({
+    where: { id },
+  });
+
+  if (!existingUser) {
+    throw new NotFoundError("User not found");
+  }
+
+  // If email is being updated, check for conflicts
+  if (input.email && input.email !== existingUser.email) {
+    const emailExists = await prisma.user.findUnique({
+      where: { email: input.email },
+    });
+
+    if (emailExists) {
+      throw new ConflictError("Email already in use by another user");
+    }
+  }
+
+  // Separate addresses into updates and creates
+  const addressUpdates: Array<{ id: string; data: any }> = [];
+  const addressCreates: Array<any> = [];
+
+  if (input.addresses && input.addresses.length > 0) {
+    for (const addr of input.addresses) {
+      if (addr.addressId) {
+        // Update existing address
+        // First verify the address belongs to this user
+        const existingAddress = await prisma.address.findFirst({
+          where: {
+            id: addr.addressId,
+            userId: id,
+          },
+        });
+
+        if (!existingAddress) {
+          throw new NotFoundError(
+            `Address with ID ${addr.addressId} not found for this user`,
+          );
+        }
+
+        addressUpdates.push({
+          id: addr.addressId,
+          data: {
+            addressType: addr.addressType,
+            street_address: addr.street_address,
+            city: addr.city,
+            state: addr.state,
+            postal_code: addr.postal_code,
+            isDefault: addr.isDefault,
+          },
+        });
+      } else {
+        // Create new address
+        addressCreates.push({
+          addressType: addr.addressType,
+          street_address: addr.street_address,
+          city: addr.city,
+          state: addr.state,
+          postal_code: addr.postal_code,
+          isDefault: addr.isDefault ?? false,
+        });
+      }
+    }
+  }
+
+  // Update the user and handle addresses in a transaction
+  const updatedUser = await prisma.$transaction(async (tx) => {
+    // Update user basic info
+    const user = await tx.user.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined && { name: input.name }),
+        ...(input.email !== undefined && { email: input.email }),
+        ...(input.phone !== undefined && { phone: input.phone }),
+        ...(input.roles !== undefined && { roles: input.roles }),
+        ...(input.isActive !== undefined && { isActive: input.isActive }),
+        ...(input.extras !== undefined && { extras: input.extras }),
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        roles: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        extras: true,
+      },
+    });
+
+    // Update existing addresses
+    for (const update of addressUpdates) {
+      await tx.address.update({
+        where: { id: update.id },
+        data: update.data,
+      });
+    }
+
+    // Create new addresses
+    if (addressCreates.length > 0) {
+      await tx.address.createMany({
+        data: addressCreates.map((addr) => ({
+          ...addr,
+          userId: id,
+        })),
+      });
+    }
+
+    // Fetch complete user with addresses
+    return tx.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        roles: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        extras: true,
+        addresses: {
+          select: {
+            id: true,
+            addressType: true,
+            street_address: true,
+            city: true,
+            state: true,
+            postal_code: true,
+            isDefault: true,
+          },
+        },
+      },
+    });
+  });
+
+  return updatedUser!;
+}
 
 export async function getUserById(id: string) {
   const user = await prisma.user.findUnique({
@@ -6,10 +214,12 @@ export async function getUserById(id: string) {
     select: {
       id: true,
       email: true,
+      name: true,
+      lastLogin: true,
       phone: true,
-      address: true,
       roles: true,
       createdAt: true,
+      addresses: true,
     },
   });
   if (!user) throw new Error("User not found");

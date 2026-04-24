@@ -6,20 +6,117 @@ import {
   AuthRequest,
 } from "../middlewares/auth.js";
 import {
+  createUser,
   getUserById,
   updateUser,
+  updateUserById,
   searchUsers,
   getUserAddresses,
 } from "../services/user.service.js";
 import { validate } from "../middlewares/validate.js";
 import { NotFoundError } from "../lib/errors.js";
+import {
+  CreateUserInputSchema,
+  UpdateUserInputSchema,
+} from "../types/user.type.js";
 
 const router = Router();
 
 const UpdateUserSchema = z.object({
   phone: z.string().optional(),
-  address: z.string().optional(),
+  address: z.string().optional(), // this is not valid
 });
+
+/**
+ * @openapi
+ * /users:
+ *   post:
+ *     tags: [Users]
+ *     summary: Create a new user (admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - roles
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 minLength: 1
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phone:
+ *                 type: string
+ *               roles:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   enum: [admin, vendor, customer]
+ *                 minItems: 1
+ *               isActive:
+ *                 type: boolean
+ *                 default: true
+ *               extras:
+ *                 type: object
+ *               addresses:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - addressType
+ *                     - city
+ *                   properties:
+ *                     addressType:
+ *                       type: string
+ *                       description: Type of address (shipping, billing, etc.)
+ *                     street_address:
+ *                       type: string
+ *                     city:
+ *                       type: string
+ *                     state:
+ *                       type: string
+ *                     postal_code:
+ *                       type: string
+ *                     isDefault:
+ *                       type: boolean
+ *                       default: false
+ *     responses:
+ *       201:
+ *         description: User created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthenticated
+ *       403:
+ *         description: Insufficient permissions
+ *       409:
+ *         description: User with email already exists
+ */
+router.post(
+  "/",
+  authenticate,
+  requireRoles("admin"),
+  validate(CreateUserInputSchema),
+  async (req, res, next) => {
+    try {
+      const user = await createUser(req.body);
+      res.status(201).json(user);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 /**
  * @openapi
@@ -318,6 +415,105 @@ router.get(
       res.json(user);
     } catch {
       next(new NotFoundError("User not found"));
+    }
+  },
+);
+
+/**
+ * @openapi
+ * /users/{id}:
+ *   patch:
+ *     tags: [Users]
+ *     summary: Update a specific user (admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 minLength: 1
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phone:
+ *                 type: string
+ *               roles:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   enum: [admin, vendor, customer]
+ *                 minItems: 1
+ *               isActive:
+ *                 type: boolean
+ *               extras:
+ *                 type: object
+ *               addresses:
+ *                 type: array
+ *                 description: Array of addresses. Include addressId to update existing address, omit to create new one.
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - addressType
+ *                     - city
+ *                   properties:
+ *                     addressId:
+ *                       type: string
+ *                       format: uuid
+ *                       description: Include to update existing address, omit to create new
+ *                     addressType:
+ *                       type: string
+ *                       description: Type of address (shipping, billing, etc.)
+ *                     street_address:
+ *                       type: string
+ *                     city:
+ *                       type: string
+ *                     state:
+ *                       type: string
+ *                     postal_code:
+ *                       type: string
+ *                     isDefault:
+ *                       type: boolean
+ *     responses:
+ *       200:
+ *         description: User updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthenticated
+ *       403:
+ *         description: Insufficient permissions
+ *       404:
+ *         description: User not found
+ *       409:
+ *         description: Email already in use by another user
+ */
+router.patch(
+  "/:id",
+  authenticate,
+  requireRoles("admin"),
+  validate(UpdateUserInputSchema),
+  async (req, res, next) => {
+    try {
+      const user = await updateUserById(req.params.id as string, req.body);
+      res.json(user);
+    } catch (err) {
+      next(err);
     }
   },
 );
