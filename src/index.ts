@@ -1,6 +1,7 @@
 import app from "./app.js";
 import { logger } from "./lib/logger.js";
-import { startEmailWorker } from "./queues/emailWorker.js";
+import { workerManager } from "./queues/index.js";
+import { registerAllEventHandlers } from "./events/index.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -19,7 +20,11 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-startEmailWorker();
+// Register all event handlers (must be before workers start)
+registerAllEventHandlers();
+
+// Start all queue workers
+workerManager.startAllWorkers();
 
 app.listen(port, (err) => {
   if (err) {

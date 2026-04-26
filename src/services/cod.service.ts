@@ -5,9 +5,9 @@ import {
   StockMovementType,
 } from "../lib/prisma.js";
 import { updateOrderStatus } from "./order.service.js";
-import { computeCommission } from "./affiliate.service.js";
 import { createStockMovement } from "./stock.service.js";
 import { StockReason } from "../types/stock-movement.type.js";
+import { AppEvent, appEvents, OrderCancelledPayload } from "../events/index.js";
 
 export interface CODVerificationInput {
   orderId: string;
@@ -26,10 +26,24 @@ export interface ListCODVerificationsFilters {
   limit?: number;
 }
 
+function emitOrderCancelledEvent(data: OrderCancelledPayload) {
+  appEvents.emit(AppEvent.ORDER_CANCELLED, data);
+}
+
 export async function verifyCODOrder(input: CODVerificationInput) {
   const order = await prisma.order.findUnique({
     where: { id: input.orderId },
-    include: { items: true, payment: true, affiliate: true },
+    include: {
+      items: true,
+      payment: true,
+      user: {
+        select: {
+          id: true,
+          email: true,
+        },
+      },
+      affiliate: true,
+    },
   });
 
   if (!order) throw new Error("Order not found");
@@ -92,7 +106,17 @@ export async function verifyCODOrder(input: CODVerificationInput) {
         reason: StockReason.ORDER_CANCELLED,
         orderId: order.id,
         userId: input.adminId,
-        notes: "COD verification rejected",
+        notes: input.remarks || "COD verification rejected",
+      });
+    }
+    if (order.user) {
+      emitOrderCancelledEvent({
+        orderId: order.id,
+        userId: order.user.id,
+        userEmail: order.user.email,
+        paymentMethod: order.paymentMethod,
+        reason: input.remarks || "COD verification rejected",
+        refundAmount: order.totalAmount,
       });
     }
   }

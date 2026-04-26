@@ -15,9 +15,10 @@ import {
 import { StockReason } from "../types/stock-movement.type.js";
 import { BadRequestError, NotFoundError } from "../lib/errors.js";
 import {
-  enqueueOrderConfirmation,
-  enqueueAdminNewOrder,
-} from "../queues/emailQueue.js";
+  appEvents,
+  AppEvent,
+  OrderStatusUpdatedPayload,
+} from "../events/index.js";
 import type {
   CreateOrderInput,
   AddressInput,
@@ -325,39 +326,61 @@ async function processStockMovements(
 }
 
 /**
- * Send order confirmation emails (async, non-blocking)
+ * Emit order created event (async, non-blocking)
  */
-function sendOrderNotifications(
+function emitOrderCreatedEvent(
   order: any,
-  totalAmount: number,
+  totals: ReturnType<typeof calculateOrderTotals>,
   paymentMethod: string,
 ) {
-  const itemsForEmail = order.items.map((item: any) => ({
+  const itemsForEvent = order.items.map((item: any) => ({
+    productId: item.productId,
     title: item.product.title,
     quantity: item.quantity,
-    price: item.unitPrice,
+    unitPrice: item.unitPrice,
+    totalPrice: item.totalPrice,
   }));
 
-  // Customer email
-  if (order.user?.email) {
-    enqueueOrderConfirmation({
-      to: order.user.email,
-      orderId: order.id,
-      finalAmount: totalAmount,
-      paymentMethod,
-      items: itemsForEmail,
-    }).catch(() => {}); // Silent fail for email
-  }
-
-  // Admin notification
-  enqueueAdminNewOrder({
+  // Emit ORDER_CREATED event with full breakdown
+  appEvents.emit(AppEvent.ORDER_CREATED, {
     orderId: order.id,
-    finalAmount: totalAmount,
+    userId: order.userId,
+    userEmail: order.user?.email,
+    subtotal: totals.subtotal,
+    discountAmount: totals.discountAmount,
+    taxAmount: totals.taxAmount,
+    shippingAmount: totals.shippingAmount,
+    totalAmount: totals.totalAmount,
+    finalAmount: totals.totalAmount,
     paymentMethod,
-    customerEmail: order.user?.email,
-  }).catch(() => {}); // Silent fail for email
+    items: itemsForEvent,
+  });
 }
 
+function emitOrderStatusUpdatedEvent(
+  data: OrderStatusUpdatedPayload,
+  paymentMethod?: string,
+) {
+  switch (data.newStatus) {
+    case OrderStatus.CANCELLED:
+      appEvents.emit(AppEvent.ORDER_CANCELLED, {
+        ...data,
+        paymentMethod: paymentMethod || "UNKNOWN",
+      });
+      break;
+    case OrderStatus.SHIPPED:
+      appEvents.emit(AppEvent.ORDER_SHIPPED, data);
+      break;
+    case OrderStatus.COMPLETED:
+      appEvents.emit(AppEvent.ORDER_DELIVERED, {
+        ...data,
+        deliveredAt: new Date(),
+      });
+      break;
+    default:
+      appEvents.emit(AppEvent.ORDER_STATUS_UPDATED, data);
+  }
+}
 /**
  * Verify order input and calculate totals without creating the order
  * Returns price breakdown, product details, and validates stock availability
@@ -451,7 +474,7 @@ export async function createOrder(input: CreateOrderInput) {
 
     await processStockMovements(input.items, order.id, userId, tx);
 
-    sendOrderNotifications(order, totals.totalAmount, input.paymentMethod);
+    emitOrderCreatedEvent(order, totals, input.paymentMethod);
 
     return order;
   });
@@ -558,7 +581,7 @@ export async function updateOrderStatus(
   const updated = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      include: { items: true },
+      include: { items: true, user: { select: { email: true, id: true } } },
     });
     if (!order) throw new NotFoundError("Order not found");
 
@@ -624,6 +647,17 @@ export async function updateOrderStatus(
       }
     }
 
+    if (order.user) {
+      const eventPayload: OrderStatusUpdatedPayload = {
+        orderId: orderId,
+        userId: order.user.id,
+        userEmail: order?.user.email,
+        oldStatus: order.status,
+        newStatus: updated.status,
+        trackingNumber: orderId,
+      };
+      emitOrderStatusUpdatedEvent(eventPayload, order.paymentMethod);
+    }
     return updated;
   });
 

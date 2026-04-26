@@ -1,6 +1,8 @@
 import { prisma } from "../lib/prisma.js";
 import type { CreateUserInput, UpdateUserInput } from "../types/user.type.js";
 import { ConflictError, NotFoundError } from "../lib/errors.js";
+import { appEvents } from "../events/emitter.js";
+import { AppEvent } from "../events/types.js";
 
 export async function createUser(input: CreateUserInput) {
   // Check if email already exists
@@ -60,6 +62,14 @@ export async function createUser(input: CreateUserInput) {
         },
       },
     },
+  });
+
+  // Emit USER_REGISTERED event
+  appEvents.emit(AppEvent.USER_REGISTERED, {
+    userId: user.id,
+    email: user.email,
+    name: user.name || "User",
+    role: user.roles[0] || "customer",
   });
 
   return user;
@@ -204,6 +214,49 @@ export async function updateUserById(id: string, input: UpdateUserInput) {
       },
     });
   });
+
+  // Emit events based on what changed
+  if (updatedUser) {
+    // Track updated fields
+    const updatedFields: string[] = [];
+
+    // Check for email change
+    if (input.email && input.email !== existingUser.email) {
+      appEvents.emit(AppEvent.EMAIL_CHANGED, {
+        userId: updatedUser.id,
+        oldEmail: existingUser.email,
+        newEmail: input.email,
+        userName: updatedUser.name || "User",
+      });
+    }
+
+    // Track other profile field changes
+    if (input.name !== undefined && input.name !== existingUser.name) {
+      updatedFields.push("name");
+    }
+    if (input.phone !== undefined && input.phone !== existingUser.phone) {
+      updatedFields.push("phone");
+    }
+    if (input.roles !== undefined) {
+      updatedFields.push("roles");
+    }
+    if (input.isActive !== undefined && input.isActive !== existingUser.isActive) {
+      updatedFields.push("isActive");
+    }
+    if (input.addresses && input.addresses.length > 0) {
+      updatedFields.push("addresses");
+    }
+
+    // Emit PROFILE_UPDATED if any non-email fields changed
+    if (updatedFields.length > 0) {
+      appEvents.emit(AppEvent.PROFILE_UPDATED, {
+        userId: updatedUser.id,
+        email: updatedUser.email,
+        userName: updatedUser.name || "User",
+        updatedFields,
+      });
+    }
+  }
 
   return updatedUser!;
 }

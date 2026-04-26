@@ -16,6 +16,7 @@ import {
 import { validate } from "../middlewares/validate.js";
 import { NotFoundError } from "../lib/errors.js";
 import {
+  CreateUserInput,
   CreateUserInputSchema,
   UpdateUserInputSchema,
 } from "../types/user.type.js";
@@ -110,7 +111,8 @@ router.post(
   validate(CreateUserInputSchema),
   async (req, res, next) => {
     try {
-      const user = await createUser(req.body);
+      const body = req.body as CreateUserInput;
+      const user = await createUser(body);
       res.status(201).json(user);
     } catch (err) {
       next(err);

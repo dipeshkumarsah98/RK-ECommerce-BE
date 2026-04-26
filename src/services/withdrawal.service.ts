@@ -16,10 +16,7 @@ import type {
   ListWithdrawalQuery,
   VendorBalanceResponse,
 } from "../types/withdrawal.type.js";
-import {
-  enqueueWithdrawalRequested,
-  enqueueWithdrawalProcessed,
-} from "../queues/emailQueue.js";
+import { appEvents, AppEvent } from "../events/index.js";
 import { getSignedR2Url } from "../lib/storage.js";
 
 /**
@@ -185,12 +182,14 @@ export async function createWithdrawalRequest(
     },
   });
 
-  // Enqueue admin notification email
-  await enqueueWithdrawalRequested({
+  // Emit withdrawal requested event
+  appEvents.emit(AppEvent.WITHDRAWAL_REQUESTED, {
+    withdrawalId: withdrawal.id,
+    vendorId: withdrawal.vendorId,
     vendorName: withdrawal.vendor.name,
     vendorEmail: withdrawal.vendor.email,
     amount: withdrawal.amount,
-    withdrawalId: withdrawal.id,
+    remarks: input.remarks,
   });
 
   return withdrawal;
@@ -379,14 +378,16 @@ export async function approveWithdrawal(
     },
   });
 
-  // Enqueue vendor notification email
-  await enqueueWithdrawalProcessed({
-    to: updated.vendor.email,
+  // Emit withdrawal approved event
+  appEvents.emit(AppEvent.WITHDRAWAL_APPROVED, {
+    withdrawalId: updated.id,
+    vendorId: updated.vendorId,
     vendorName: updated.vendor.name,
+    vendorEmail: updated.vendor.email,
     amount: updated.amount,
-    status: "APPROVED",
     transactionProof: input.transactionProof,
     remarks: input.remarks,
+    approvedBy: adminId,
   });
 
   // Sign transaction proof URL before returning
@@ -419,14 +420,16 @@ export async function rejectWithdrawal(
     },
   });
 
-  // Enqueue vendor notification email
-  await enqueueWithdrawalProcessed({
-    to: updated.vendor.email,
+  // Emit withdrawal rejected event
+  appEvents.emit(AppEvent.WITHDRAWAL_REJECTED, {
+    withdrawalId: updated.id,
+    vendorId: updated.vendorId,
     vendorName: updated.vendor.name,
+    vendorEmail: updated.vendor.email,
     amount: updated.amount,
-    status: "REJECTED",
     rejectionReason: input.rejectionReason,
     remarks: input.remarks,
+    rejectedBy: adminId,
   });
 
   return updated;
